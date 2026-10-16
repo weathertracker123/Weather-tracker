@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Boston Sky and River</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2313202A'/%3E%3Ccircle cx='42' cy='22' r='9' fill='%23F2C46B'/%3E%3Cpath d='M10 24h22M14 31h14' stroke='%23CFE6EA' stroke-width='4' stroke-linecap='round'/%3E%3Cpath d='M8 46c6-5 10-5 16 0s10 5 16 0 10-5 16 0' fill='none' stroke='%234FB3C5' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2313202A'/%3E%3Ccircle cx='42' cy='22' r='9' fill='%23F2C46B'/%3E%3Cpath d='M10 24h22M14 31h14' stroke='%23CFE6EA' stroke-width='4' stroke-linecap='round'/%3E%3Cpath d='M8 46c6-5 10-5 16 0s10 5 16 0 10-5 16 0' fill='none' stroke='%234FB3C5' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: animated sky band on top, alert strip, three instrument panels, then a 48-hour chart and hour strip */
+:root{
+  --bg:#EDF1F3; --surface:#FFFFFF; --ink:#13202A; --muted:#5A6B77; --line:#D3DCE2;
+  --river:#1D7486; --river-soft:#CFE6EA; --warn:#B4610E; --warn-soft:#FBEBD9; --danger:#A3262A; --danger-soft:#F7DEDE;
+  --temp:#C2522D; --rain:#2F6FB3; --wind:#1D7486;
+  --head:#C0392B; --cross:#D08A1C; --tail:#2E8B57; --particle:#0F3A44;
+  --sky-top:#7FA7C4; --sky-bot:#C9D9E4;
+  --display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0E161C; --surface:#152029; --ink:#E4ECF0; --muted:#8FA2AE; --line:#24333E;
+  --river:#4FB3C5; --river-soft:#16323A; --warn:#E89A4B; --warn-soft:#33251A; --danger:#E5686B; --danger-soft:#3A1C1E;
+  --temp:#E8825E; --rain:#6FA6E0; --wind:#4FB3C5; --head:#F06A5E; --cross:#F0B04A; --tail:#5FC08A; --particle:#DDF4F8; --sky-top:#1B2C3B; --sky-bot:#2C4255; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--body)}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px;display:grid;gap:20px}
+h1,h2,h3{margin:0;text-wrap:balance}
+.label{font:500 11px/1.2 var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.num{font-family:var(--display);font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* Sky */
+.sky{position:relative;border-radius:14px;overflow:hidden;min-height:300px;background:linear-gradient(var(--sky-top),var(--sky-bot));color:#fff}
+.sky canvas{position:absolute;inset:0;width:100%;height:100%}
+.sky-inner{position:relative;display:grid;grid-template-columns:1fr auto;gap:16px;padding:22px 24px;min-height:300px;align-content:space-between;text-shadow:0 1px 8px rgba(0,0,0,.25)}
+.sky .label{color:rgba(255,255,255,.85)}
+.place{font:600 15px/1.2 var(--body)}
+.bigtemp{font:600 clamp(84px,16vw,148px)/.85 var(--display);letter-spacing:-.02em}
+.bigtemp sup{font-size:.38em;vertical-align:top;position:relative;top:.25em;margin-left:2px}
+.cond{font:600 clamp(22px,3.4vw,30px)/1.1 var(--display);letter-spacing:.02em}
+.sky-meta{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px;color:rgba(255,255,255,.92)}
+.sky-right{text-align:right;align-self:start;display:grid;gap:6px;justify-items:end}
+.refresh{appearance:none;border:1px solid rgba(255,255,255,.6);background:rgba(255,255,255,.12);color:#fff;font:500 13px var(--body);padding:6px 12px;border-radius:999px;cursor:pointer}
+.refresh:hover{background:rgba(255,255,255,.24)}
+.refresh:focus-visible,.tab:focus-visible{outline:2px solid var(--river);outline-offset:2px}
+
+/* Alerts */
+.alerts{display:grid;gap:10px}
+.alert{border:1px solid var(--line);border-left:5px solid var(--warn);background:var(--warn-soft);border-radius:8px;padding:12px 16px}
+.alert.severe{border-left-color:var(--danger);background:var(--danger-soft)}
+.alert.none{border-left-color:var(--river);background:var(--surface)}
+.alert summary{cursor:pointer;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;list-style:none}
+.alert summary::-webkit-details-marker{display:none}
+.alert h3{font:600 17px/1.3 var(--body)}
+.alert .when{font-size:13px;color:var(--muted)}
+.alert p{margin:10px 0 0;white-space:pre-line;font-size:14px;max-width:75ch}
+
+/* Panels */
+.panels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media (max-width:900px){.panels{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;gap:14px;align-content:start;min-width:0}
+.panel-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.panel h2{font:600 22px/1 var(--display);letter-spacing:.03em;text-transform:uppercase}
+.reading{display:flex;align-items:center;gap:18px}
+.reading .val{font:600 56px/.9 var(--display)}
+.reading .unit{font:500 15px var(--body);color:var(--muted);margin-left:4px}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;border-top:1px solid var(--line);padding-top:12px}
+.stats div{display:grid;gap:2px}
+.stats b{font:600 20px/1 var(--display);font-variant-numeric:tabular-nums}
+.compass{width:96px;height:96px;flex:none}
+.river-canvas{width:100%;height:84px;border-radius:8px;display:block;background:var(--river-soft)}
+.spark{width:100%;height:56px;display:block}
+.pill{display:inline-block;font:600 11px/1 var(--body);letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;border-radius:999px;background:var(--river-soft);color:var(--river)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--danger-soft);color:var(--danger)}
+.note{font-size:13px;color:var(--muted);margin:0}
+.rainbars{display:flex;align-items:flex-end;gap:2px;height:56px}
+.rainbars span{flex:1;background:var(--rain);border-radius:2px 2px 0 0;min-height:1px;opacity:.85}
+
+/* Water conditions */
+.water{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;display:flex;flex-wrap:wrap;gap:10px 28px;align-items:center}
+.water h2{font:600 20px/1 var(--display);letter-spacing:.03em;text-transform:uppercase}
+.water p{margin:0;max-width:70ch}
+
+/* Hourly */
+.hourly{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;gap:14px;min-width:0}
+.tabs{display:flex;gap:4px;background:var(--bg);padding:4px;border-radius:999px;width:max-content;max-width:100%;flex-wrap:wrap}
+.tab{appearance:none;border:0;background:transparent;color:var(--muted);font:500 14px var(--body);padding:7px 16px;border-radius:999px;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.chart-box{position:relative}
+#chart{width:100%;height:260px;display:block}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font:500 12px/1.4 var(--mono);padding:6px 9px;border-radius:6px;white-space:nowrap;transform:translate(-50%,-110%)}
+.strip-wrap{overflow-x:auto;border-top:1px solid var(--line);padding-top:12px}
+.strip{display:grid;grid-auto-flow:column;grid-auto-columns:64px;gap:4px}
+.hr{display:grid;justify-items:center;gap:4px;padding:8px 2px;border-radius:8px;font-size:12px;text-align:center}
+.hr.now{background:var(--river-soft)}
+.hr .t{color:var(--muted);font-family:var(--mono)}
+.hr .tp{font:600 20px/1 var(--display)}
+.hr svg{width:26px;height:26px}
+.hr .pp{color:var(--rain);font-family:var(--mono)}
+.hr .ws{font-family:var(--mono)}
+/* Course map */
+.course{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;gap:14px;min-width:0}
+.course h2{font:600 22px/1 var(--display);letter-spacing:.03em;text-transform:uppercase}
+.map-box{position:relative;height:500px;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+@media (max-width:640px){.map-box{height:380px}}
+#map{position:absolute;inset:0;background:var(--river-soft)}
+#windLayer{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:450}
+.wind-badge{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,.15);font:500 13px var(--body)}
+.wind-badge svg{width:44px;height:44px}
+.wind-badge b{font:600 26px/1 var(--display);display:block}
+.leaflet-tooltip.lm{background:var(--surface);color:var(--ink);border:1px solid var(--line);font:600 11px/1.2 var(--body);letter-spacing:.04em;padding:3px 7px;box-shadow:none}
+.leaflet-tooltip.lm::before{display:none}
+.leaflet-tooltip.lm.end{background:var(--ink);color:var(--bg)}
+.leaflet-control-layers{background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--line)!important;border-radius:8px!important;font:500 13px var(--body)}
+.leaflet-control-layers-expanded{padding:6px 10px}
+.leaflet-control-layers label{display:flex;align-items:center;gap:4px}
+.leaflet-control-zoom a,.map-btn{background:var(--surface)!important;color:var(--ink)!important;border-color:var(--line)!important}
+.map-btn{appearance:none;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font:500 13px var(--body);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.course-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 20px;align-items:center}
+@media (max-width:640px){.course-controls{grid-template-columns:1fr}}
+#hourSlider{width:100%;accent-color:var(--river)}
+.hour-read{font:500 14px var(--body)}
+.hour-read b{font-family:var(--mono);font-weight:500}
+.split{display:flex;height:12px;border-radius:999px;overflow:hidden;background:var(--line)}
+.split span{display:block;height:100%;transition:width .4s}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--muted)}
+.legend i{display:inline-block;width:18px;height:5px;border-radius:3px;vertical-align:middle;margin-right:6px}
+footer{font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 18px}
+footer a{color:var(--river)}
+.err{color:var(--danger);font-size:13px}
+@media (max-width:560px){.sky-inner{grid-template-columns:1fr}.sky-right{justify-items:start;text-align:left}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <section class="sky" aria-label="Current conditions">
+    <canvas id="sky"></canvas>
+    <div class="sky-inner">
+      <div style="display:grid;gap:10px">
+        <div><div class="label">Now in</div><div class="place">Boston, Massachusetts</div></div>
+        <div class="bigtemp num" id="nowTemp">--<sup>&deg;F</sup></div>
+        <div class="cond" id="nowCond">Loading conditions</div>
+        <div class="sky-meta" id="nowMeta"></div>
+      </div>
+      <div class="sky-right">
+        <button class="refresh" id="refresh" type="button">Refresh</button>
+        <div class="label" id="updated">Updating</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="alerts" id="alerts" aria-label="Weather warnings"></section>
+
+  <section class="panels">
+    <article class="panel" aria-labelledby="windH">
+      <div class="panel-head"><h2 id="windH">Wind</h2><span class="pill" id="windPill">--</span></div>
+      <div class="reading">
+        <svg class="compass" viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="50" r="44" fill="none" stroke="var(--line)" stroke-width="2"/>
+          <g font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)" text-anchor="middle">
+            <text x="50" y="16">N</text><text x="88" y="54">E</text><text x="50" y="92">S</text><text x="12" y="54">W</text>
+          </g>
+          <g id="needle" style="transform-origin:50px 50px;transition:transform 1.2s cubic-bezier(.3,1.4,.5,1)">
+            <path d="M50 18 L57 52 L50 46 L43 52 Z" fill="var(--wind)"/>
+            <line x1="50" y1="46" x2="50" y2="80" stroke="var(--wind)" stroke-width="3" stroke-linecap="round"/>
+          </g>
+          <circle cx="50" cy="50" r="3.5" fill="var(--ink)"/>
+        </svg>
+        <div><span class="val num" id="windSpd">--</span><span class="unit">mph</span><div class="note" id="windDir">--</div></div>
+      </div>
+      <div class="stats">
+        <div><span class="label">Gusts</span><b id="gust">--</b></div>
+        <div><span class="label">Peak 24h</span><b id="gustMax">--</b></div>
+        <div><span class="label">Feels like</span><b id="feels">--</b></div>
+      </div>
+    </article>
+
+    <article class="panel" aria-labelledby="rainH">
+      <div class="panel-head"><h2 id="rainH">Precipitation</h2><span class="pill" id="rainPill">--</span></div>
+      <div class="reading"><div><span class="val num" id="rainChance">--</span><span class="unit">% next hour</span></div></div>
+      <div>
+        <div class="label" style="margin-bottom:6px">Chance by hour, next 24</div>
+        <div class="rainbars" id="rainBars" aria-hidden="true"></div>
+      </div>
+      <div class="stats">
+        <div><span class="label">Next 24h</span><b id="rain24">--</b></div>
+        <div><span class="label">Humidity</span><b id="hum">--</b></div>
+        <div><span class="label">Cloud</span><b id="cloud">--</b></div>
+      </div>
+    </article>
+
+    <article class="panel" aria-labelledby="riverH">
+      <div class="panel-head"><h2 id="riverH">Charles River</h2><span class="pill" id="riverPill">--</span></div>
+      <canvas class="river-canvas" id="river" aria-hidden="true"></canvas>
+      <div class="reading"><div><span class="val num" id="flow">--</span><span class="unit">cubic ft/s</span><div class="note" id="riverSite">USGS gauge 01104500, Charles River at Waltham</div></div></div>
+      <div>
+        <div class="label" style="margin-bottom:4px">Discharge, last 7 days</div>
+        <canvas class="spark" id="spark" aria-hidden="true"></canvas>
+      </div>
+      <div class="stats">
+        <div><span class="label">Gauge ht</span><b id="stage">--</b></div>
+        <div><span class="label">24h change</span><b id="flowChg">--</b></div>
+        <div><span class="label">7d range</span><b id="flowRange">--</b></div>
+      </div>
+    </article>
+  </section>
+
+  <section class="water" aria-labelledby="waterH">
+    <h2 id="waterH">On the water</h2>
+    <span class="pill" id="waterPill">--</span>
+    <p id="waterText">Checking wind and river flow.</p>
+  </section>
+
+  <section class="course" aria-labelledby="courseH">
+    <div class="panel-head" style="flex-wrap:wrap">
+      <h2 id="courseH">Head of the Charles course wind</h2>
+      <span class="pill" id="coursePill">--</span>
+    </div>
+    <div class="map-box">
+      <div id="map" role="region" aria-label="Map of the Head of the Charles course. Drag to move, scroll or pinch to zoom."></div>
+      <canvas id="windLayer" aria-hidden="true"></canvas>
+    </div>
+    <div class="course-controls">
+      <div style="display:grid;gap:6px">
+        <label class="label" for="hourSlider">Scrub the next 48 hours</label>
+        <input type="range" id="hourSlider" min="0" max="47" value="0" step="1">
+      </div>
+      <div class="hour-read" id="hourRead">--</div>
+    </div>
+    <div style="display:grid;gap:8px">
+      <div class="split" id="split" aria-hidden="true"><span style="background:var(--head)"></span><span style="background:var(--cross)"></span><span style="background:var(--tail)"></span></div>
+      <div class="legend" id="legend">
+        <span><i style="background:var(--head)"></i>Headwind <b id="pHead">--</b></span>
+        <span><i style="background:var(--cross)"></i>Crosswind <b id="pCross">--</b></span>
+        <span><i style="background:var(--tail)"></i>Tailwind <b id="pTail">--</b></span>
+      </div>
+      <p class="note">Course colors show the wind each stretch faces while racing upstream from the start to the finish. Drag the map to move around, and scroll or pinch to zoom. The course line is approximate, drawn through the bridge positions.</p>
+    </div>
+  </section>
+
+  <section class="hourly" aria-labelledby="hourH">
+    <div class="panel-head" style="flex-wrap:wrap">
+      <h2 id="hourH" style="font:600 22px/1 var(--display);letter-spacing:.03em;text-transform:uppercase">Next 48 hours</h2>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="t-temp" aria-selected="true" data-k="temp">Temperature</button>
+        <button class="tab" role="tab" id="t-rain" aria-selected="false" data-k="rain">Precipitation</button>
+        <button class="tab" role="tab" id="t-wind" aria-selected="false" data-k="wind">Wind</button>
+      </div>
+    </div>
+    <div class="chart-box"><canvas id="chart"></canvas><div class="tip" id="tip" hidden></div></div>
+    <div class="strip-wrap"><div class="strip" id="strip"></div></div>
+  </section>
+
+  <footer>
+    <span>Forecast: <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a></span>
+    <span>Warnings: <a href="https://www.weather.gov/box/" target="_blank" rel="noopener">National Weather Service, Boston/Norton</a></span>
+    <span>River: <a href="https://waterdata.usgs.gov/monitoring-location/01104500/" target="_blank" rel="noopener">USGS 01104500</a> (provisional data)</span>
+    <span>Map: &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>; satellite imagery &copy; Esri, Maxar, Earthstar Geographics</span>
+    <span>Refreshes every 10 minutes.</span>
+  </footer>
+</div>
+
+<script>
+const LAT=42.3601, LON=-71.0589, GAUGE="01104500";
+const $=id=>document.getElementById(id);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const state={wx:null,river:null,tab:"temp",scene:{kind:"clear",wind:5,dir:270,precip:0,cloud:20,day:true}};
+
+/* ---------- weather codes ---------- */
+function codeInfo(c){
+  const m={0:["Clear","clear"],1:["Mostly clear","clear"],2:["Partly cloudy","cloud"],3:["Overcast","cloud"],
+    45:["Fog","fog"],48:["Freezing fog","fog"],51:["Light drizzle","rain"],53:["Drizzle","rain"],55:["Heavy drizzle","rain"],
+    56:["Freezing drizzle","rain"],57:["Freezing drizzle","rain"],61:["Light rain","rain"],63:["Rain","rain"],65:["Heavy rain","rain"],
+    66:["Freezing rain","rain"],67:["Freezing rain","rain"],71:["Light snow","snow"],73:["Snow","snow"],75:["Heavy snow","snow"],
+    77:["Snow grains","snow"],80:["Rain showers","rain"],81:["Rain showers","rain"],82:["Violent showers","rain"],
+    85:["Snow showers","snow"],86:["Heavy snow showers","snow"],95:["Thunderstorm","storm"],96:["Thunderstorm, hail","storm"],99:["Thunderstorm, hail","storm"]};
+  return m[c]||["Unknown","cloud"];
+}
+function compassName(d){return ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"][Math.round(d/22.5)%16]}
+function icon(kind,day){
+  const s='stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"';
+  const sun=`<circle cx="12" cy="12" r="4.2" ${s}/><g ${s}><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></g>`;
+  const moon=`<path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z" ${s}/>`;
+  const cl=`<path d="M7 18h10a4 4 0 0 0 .5-8A5.5 5.5 0 0 0 7 9.5 4.2 4.2 0 0 0 7 18z" ${s}/>`;
+  const map={clear:day?sun:moon,cloud:cl,fog:`<g ${s}><path d="M4 9h16M3 13h18M5 17h14"/></g>`,
+    rain:cl.replace('18h10','14h10').replace('4.2 4.2 0 0 0 7 18','4.2 4.2 0 0 0 7 14')+`<g ${s}><path d="M8 17l-1 3M12 17l-1 3M16 17l-1 3"/></g>`,
+    snow:cl.replace('18h10','14h10').replace('4.2 4.2 0 0 0 7 18','4.2 4.2 0 0 0 7 14')+`<g fill="currentColor"><circle cx="8" cy="18.5" r="1.1"/><circle cx="12" cy="20" r="1.1"/><circle cx="16" cy="18.5" r="1.1"/></g>`,
+    storm:cl.replace('18h10','14h10').replace('4.2 4.2 0 0 0 7 18','4.2 4.2 0 0 0 7 14')+`<path d="M12.5 15l-2.5 4h3l-2 4" ${s}/>`};
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${map[kind]||cl}</svg>`;
+}
+
+/* ---------- fetchers ---------- */
+async function getWeather(){
+  const u=`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}`+
+   `&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,is_day,pressure_msl`+
+   `&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,is_day`+
+   `&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset`+
+   `&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=America%2FNew_York&forecast_days=3`;
+  const r=await fetch(u); if(!r.ok) throw new Error("Forecast service returned "+r.status); return r.json();
+}
+async function getAlerts(){
+  const r=await fetch(`https://api.weather.gov/alerts/active?point=${LAT},${LON}`,{headers:{Accept:"application/geo+json"}});
+  if(!r.ok) throw new Error("Warnings service returned "+r.status); return (await r.json()).features||[];
+}
+async function getRiver(){
+  try{
+    const r=await fetch(`https://waterservices.usgs.gov/nwis/iv/?format=json&sites=${GAUGE}&parameterCd=00060,00065&period=P7D&siteStatus=all`);
+    if(!r.ok) throw 0;
+    const j=await r.json(); const out={flow:[],stage:[]};
+    for(const ts of j.value.timeSeries){
+      const code=ts.variable.variableCode[0].value;
+      const pts=ts.values[0].value.map(v=>({t:new Date(v.dateTime),v:+v.value})).filter(p=>p.v>-9000);
+      if(code==="00060") out.flow=pts; if(code==="00065") out.stage=pts;
+    }
+    if(out.flow.length) return out; throw 0;
+  }catch(e){
+    // Fallback: newer USGS Water Data API
+    const since=new Date(Date.now()-7*864e5).toISOString();
+    const q=p=>`https://api.waterdata.usgs.gov/ogcapi/v0/collections/continuous/items?f=json&monitoring_location_id=USGS-${GAUGE}&parameter_code=${p}&datetime=${since}/..&limit=5000`;
+    const grab=async p=>{const r=await fetch(q(p)); if(!r.ok) return [];
+      const j=await r.json(); return (j.features||[]).map(f=>({t:new Date(f.properties.time),v:+f.properties.value})).filter(p=>!isNaN(p.v)).sort((a,b)=>a.t-b.t)};
+    const [flow,stage]=await Promise.all([grab("00060"),grab("00065")]);
+    if(!flow.length) throw new Error("River gauge data is not available right now");
+    return {flow,stage};
+  }
+}
+
+/* ---------- renderers ---------- */
+function hourIndexNow(h){const now=Date.now(); let i=h.time.findIndex(t=>new Date(t).getTime()>now); return Math.max(0,(i<0?h.time.length:i)-1)}
+
+function renderWeather(w){
+  const c=w.current, h=w.hourly, i0=hourIndexNow(h), [cond,kind]=codeInfo(c.weather_code);
+  $("nowTemp").innerHTML=`${Math.round(c.temperature_2m)}<sup>&deg;F</sup>`;
+  $("nowCond").textContent=cond;
+  $("nowMeta").innerHTML=[`High ${Math.round(w.daily.temperature_2m_max[0])}&deg; / Low ${Math.round(w.daily.temperature_2m_min[0])}&deg;`,
+    `Wind ${Math.round(c.wind_speed_10m)} mph ${compassName(c.wind_direction_10m)}`,`Pressure ${Math.round(c.pressure_msl)} hPa`,
+    `Sunset ${new Date(w.daily.sunset[0]).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}`].map(x=>`<span>${x}</span>`).join("");
+  Object.assign(state.scene,{kind,wind:c.wind_speed_10m,dir:c.wind_direction_10m,precip:c.precipitation,cloud:c.cloud_cover,day:!!c.is_day});
+
+  // wind
+  $("windSpd").textContent=Math.round(c.wind_speed_10m);
+  $("windDir").textContent=`From the ${compassName(c.wind_direction_10m)} (${Math.round(c.wind_direction_10m)}°)`;
+  $("needle").style.transform=`rotate(${(c.wind_direction_10m+180)%360}deg)`;
+  $("gust").textContent=Math.round(c.wind_gusts_10m)+" mph";
+  const g24=Math.max(...h.wind_gusts_10m.slice(i0,i0+24));
+  $("gustMax").textContent=Math.round(g24)+" mph";
+  $("feels").textContent=Math.round(c.apparent_temperature)+"°";
+  const ws=c.wind_speed_10m; setPill("windPill",ws<8?"Light":ws<16?"Breezy":ws<25?"Windy":"Strong",ws<16?"":ws<25?"warn":"bad");
+
+  // precip
+  const pp=h.precipitation_probability.slice(i0,i0+24);
+  $("rainChance").textContent=pp[0]??"--";
+  $("rainBars").innerHTML=pp.map(p=>`<span style="height:${Math.max(2,p)}%" title="${p}%"></span>`).join("");
+  const tot=h.precipitation.slice(i0,i0+24).reduce((a,b)=>a+b,0);
+  $("rain24").textContent=tot.toFixed(2)+" in";
+  $("hum").textContent=c.relative_humidity_2m+"%";
+  $("cloud").textContent=c.cloud_cover+"%";
+  const mx=Math.max(...pp); setPill("rainPill",mx<20?"Dry":mx<50?"Possible":mx<80?"Likely":"Expected",mx<50?"":"warn");
+
+  renderStrip(h,i0); drawChart(); updateCourse();
+}
+function setPill(id,txt,cls){const e=$(id); e.textContent=txt; e.className="pill"+(cls?" "+cls:"")}
+
+function renderStrip(h,i0){
+  let html="";
+  for(let i=i0;i<i0+48&&i<h.time.length;i++){
+    const d=new Date(h.time[i]), [,k]=codeInfo(h.weather_code[i]);
+    const lab=i===i0?"Now":d.toLocaleTimeString([],{hour:"numeric"}).replace(" ","").toLowerCase();
+    html+=`<div class="hr${i===i0?" now":""}"><span class="t">${lab}</span>${icon(k,!!h.is_day[i])}<span class="tp">${Math.round(h.temperature_2m[i])}&deg;</span><span class="pp">${h.precipitation_probability[i]}%</span><span class="ws">${Math.round(h.wind_speed_10m[i])} ${compassName(h.wind_direction_10m[i])}</span></div>`;
+  }
+  $("strip").innerHTML=html;
+}
+
+function renderAlerts(list,err){
+  const box=$("alerts");
+  if(err){box.innerHTML=`<div class="alert none"><h3>Warnings unavailable</h3><p class="err">${err}. Check weather.gov/box directly.</p></div>`;return}
+  if(!list.length){box.innerHTML=`<div class="alert none"><summary><h3>No active warnings</h3><span class="when">National Weather Service, Boston area</span></summary></div>`;return}
+  box.innerHTML=list.map(f=>{const p=f.properties, sev=/Extreme|Severe/.test(p.severity);
+    const until=p.ends||p.expires; const t=until?"Until "+new Date(until).toLocaleString([],{weekday:"short",hour:"numeric",minute:"2-digit"}):"";
+    return `<details class="alert${sev?" severe":""}"><summary><h3>${esc(p.event)}</h3><span class="when">${esc(t)} · ${esc(p.severity)}</span></summary><p>${esc(p.headline||"")}\n\n${esc(p.description||"")}${p.instruction?"\n\n"+esc(p.instruction):""}</p></details>`}).join("");
+}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function renderRiver(r){
+  const f=r.flow, last=f[f.length-1];
+  $("flow").textContent=Math.round(last.v).toLocaleString();
+  const dayAgo=f.find(p=>p.t>=new Date(last.t-864e5))||f[0];
+  const chg=last.v-dayAgo.v, pct=dayAgo.v?chg/dayAgo.v*100:0;
+  $("flowChg").textContent=(chg>=0?"+":"")+Math.round(pct)+"%";
+  const vals=f.map(p=>p.v); $("flowRange").textContent=Math.round(Math.min(...vals))+"–"+Math.round(Math.max(...vals));
+  $("stage").textContent=r.stage.length?r.stage[r.stage.length-1].v.toFixed(2)+" ft":"--";
+  setPill("riverPill",pct>15?"Rising":pct<-15?"Falling":"Steady",pct>40?"warn":"");
+  $("riverSite").textContent=`USGS 01104500 at Waltham · ${last.t.toLocaleString([],{weekday:"short",hour:"numeric",minute:"2-digit"})}`;
+  state.river={flow:last.v,pts:f,pct}; drawSpark(); renderWater();
+}
+function riverErr(msg){$("flow").textContent="--";$("riverSite").innerHTML=`<span class="err">${msg}</span>`;setPill("riverPill","Offline","bad");renderWater()}
+
+function renderWater(){
+  const w=state.wx, r=state.river; if(!w) return;
+  const ws=w.current.wind_speed_10m, gs=w.current.wind_gusts_10m;
+  let level,cls,txt;
+  if(ws<8&&gs<14){level="Flat water";cls="";txt="Light wind";}
+  else if(ws<14&&gs<22){level="Some chop";cls="warn";txt="Moderate wind";}
+  else{level="Rough";cls="bad";txt="Strong wind";}
+  txt+=` at ${Math.round(ws)} mph from the ${compassName(w.current.wind_direction_10m)}, gusting ${Math.round(gs)}.`;
+  if(r) txt+=` River flow is ${Math.round(r.flow)} cfs and ${r.pct>15?"rising":r.pct<-15?"falling":"steady"} over the last 24 hours.`;
+  txt+=" The lower basin is tidal behind the Charles River Dam, so expect more chop in open stretches when wind runs along the river.";
+  setPill("waterPill",level,cls); $("waterText").textContent=txt;
+}
+
+/* ---------- canvas helpers ---------- */
+function fit(cv){const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);const x=cv.getContext("2d");x.setTransform(d,0,0,d,0,0);return [x,r.width,r.height]}
+
+function drawSpark(){
+  if(!state.river) return; const [x,W,H]=fit($("spark")); const p=state.river.pts;
+  const vs=p.map(a=>a.v),mn=Math.min(...vs),mx=Math.max(...vs),t0=p[0].t,t1=p[p.length-1].t;
+  const X=t=>4+(t-t0)/(t1-t0||1)*(W-8),Y=v=>H-6-(v-mn)/((mx-mn)||1)*(H-14);
+  x.clearRect(0,0,W,H); const col=css("--river");
+  x.beginPath(); p.forEach((a,i)=>i?x.lineTo(X(a.t),Y(a.v)):x.moveTo(X(a.t),Y(a.v)));
+  x.strokeStyle=col;x.lineWidth=1.8;x.stroke();
+  x.lineTo(X(t1),H);x.lineTo(X(t0),H);x.closePath();x.globalAlpha=.15;x.fillStyle=col;x.fill();x.globalAlpha=1;
+  const l=p[p.length-1];x.beginPath();x.arc(X(l.t),Y(l.v),3.5,0,7);x.fillStyle=col;x.fill();
+}
+
+const SERIES={
+  temp:{label:"°F",color:"--temp",get:h=>h.temperature_2m,alt:h=>h.apparent_temperature,fmt:v=>Math.round(v)+"°F"},
+  rain:{label:"%",color:"--rain",get:h=>h.precipitation_probability,bars:true,min:0,max:100,fmt:v=>v+"%"},
+  wind:{label:"mph",color:"--wind",get:h=>h.wind_speed_10m,alt:h=>h.wind_gusts_10m,min:0,fmt:v=>Math.round(v)+" mph"}
+};
+let chartGeom=null;
+function drawChart(){
+  const w=state.wx; if(!w) return; const h=w.hourly,i0=hourIndexNow(h),n=Math.min(48,h.time.length-i0);
+  const S=SERIES[state.tab],v=S.get(h).slice(i0,i0+n),a=S.alt?S.alt(h).slice(i0,i0+n):null;
+  const [x,W,H]=fit($("chart")),pl=40,pr=12,pt=14,pb=28;
+  const all=v.concat(a||[]);let mn=S.min??Math.floor(Math.min(...all)-2),mx=S.max??Math.ceil(Math.max(...all)+2);
+  if(mx-mn<4) mx=mn+4;
+  const step=niceStep((mx-mn)/4); mn=Math.floor(mn/step)*step; mx=Math.ceil(mx/step)*step;
+  const X=i=>pl+i/(n-1)*(W-pl-pr),Y=val=>pt+(1-(val-mn)/(mx-mn))*(H-pt-pb);
+  x.clearRect(0,0,W,H);x.font="11px IBM Plex Mono, monospace";x.fillStyle=css("--muted");x.strokeStyle=css("--line");x.lineWidth=1;
+  for(let g=mn;g<=mx+1e-9;g+=step){const y=Y(g);x.beginPath();x.moveTo(pl,y);x.lineTo(W-pr,y);x.stroke();x.textAlign="right";x.fillText(Math.round(g),pl-6,y+4)}
+  x.textAlign="center";
+  for(let i=0;i<n;i++){const d=new Date(h.time[i0+i]);const hr=d.getHours();
+    if(hr===0){x.strokeStyle=css("--muted");x.globalAlpha=.4;x.beginPath();x.moveTo(X(i),pt);x.lineTo(X(i),H-pb);x.stroke();x.globalAlpha=1;
+      x.fillText(d.toLocaleDateString([],{weekday:"short"}),X(i),H-8)}
+    else if(hr%6===0) x.fillText(d.toLocaleTimeString([],{hour:"numeric"}).replace(" ","").toLowerCase(),X(i),H-8)}
+  const col=css(S.color);
+  if(S.bars){const bw=(W-pl-pr)/n*.7;x.fillStyle=col;x.globalAlpha=.8;v.forEach((val,i)=>{x.fillRect(X(i)-bw/2,Y(val),bw,Y(mn)-Y(val))});x.globalAlpha=1;
+    const amt=h.precipitation.slice(i0,i0+n);x.fillStyle=css("--ink");x.font="10px IBM Plex Mono, monospace";
+    amt.forEach((q,i)=>{if(q>=0.02&&i%2===0)x.fillText(q.toFixed(2),X(i),Y(v[i])-4)})}
+  else{
+    if(a){x.setLineDash([4,4]);x.strokeStyle=col;x.globalAlpha=.6;x.lineWidth=1.5;line(x,a,X,Y);x.setLineDash([]);x.globalAlpha=1}
+    x.strokeStyle=col;x.lineWidth=2.4;line(x,v,X,Y);
+    x.lineTo(X(n-1),Y(mn));x.lineTo(X(0),Y(mn));x.closePath();const gr=x.createLinearGradient(0,pt,0,H-pb);gr.addColorStop(0,col+"55");gr.addColorStop(1,col+"00");x.fillStyle=gr;x.fill();
+    x.beginPath();x.arc(X(0),Y(v[0]),4,0,7);x.fillStyle=col;x.fill();
+  }
+  x.fillStyle=css("--muted");x.textAlign="left";x.font="11px IBM Plex Sans, sans-serif";
+  x.fillText(state.tab==="temp"?"Solid: temperature   Dashed: feels like":state.tab==="wind"?"Solid: sustained   Dashed: gusts":"Bars: chance of precipitation (labels: inches)",pl,10);
+  chartGeom={X,Y,n,i0,v,a,S,pl,pr,W};
+}
+function line(x,arr,X,Y){x.beginPath();arr.forEach((val,i)=>i?x.lineTo(X(i),Y(val)):x.moveTo(X(i),Y(val)));x.stroke()}
+function niceStep(r){const p=Math.pow(10,Math.floor(Math.log10(r))),f=r/p;return (f<1.5?1:f<3?2:f<7?5:10)*p}
+
+$("chart").addEventListener("mousemove",e=>{
+  if(!chartGeom) return; const g=chartGeom,rc=e.currentTarget.getBoundingClientRect(),mx=e.clientX-rc.left;
+  const i=Math.max(0,Math.min(g.n-1,Math.round((mx-g.pl)/(g.W-g.pl-g.pr)*(g.n-1))));
+  const t=new Date(state.wx.hourly.time[g.i0+i]).toLocaleString([],{weekday:"short",hour:"numeric"});
+  const tip=$("tip");tip.hidden=false;tip.style.left=g.X(i)+"px";tip.style.top=g.Y(g.v[i])+"px";
+  tip.textContent=`${t}  ${g.S.fmt(g.v[i])}${g.a?"  /  "+g.S.fmt(g.a[i]):""}`;
+});
+$("chart").addEventListener("mouseleave",()=>$("tip").hidden=true);
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-selected",t===b));state.tab=b.dataset.k;drawChart()}));
+
+/* ---------- animated sky ---------- */
+const sky=$("sky");let sx,SW,SH,parts=[],clouds=[],flash=0;
+function initSky(){[sx,SW,SH]=fit(sky);
+  parts=Array.from({length:220},()=>({x:Math.random()*SW,y:Math.random()*SH,s:.6+Math.random()*.8,r:Math.random()*2+1}));
+  clouds=Array.from({length:7},(_,i)=>({x:Math.random()*SW,y:20+Math.random()*SH*.5,w:120+Math.random()*200,o:.25+Math.random()*.35}))}
+function drawSky(t){
+  const sc=state.scene,k=sc.kind; sx.clearRect(0,0,SW,SH);
+  // wind vector: direction is where wind comes FROM; screen x uses east-west component
+  const rad=(sc.dir+180)*Math.PI/180, vx=Math.sin(rad)*(0.4+sc.wind/6);
+  // sun or moon
+  if(k==="clear"||k==="cloud"&&sc.cloud<70){const cx=SW*.78,cy=SH*.32;
+    if(sc.day){const gr=sx.createRadialGradient(cx,cy,10,cx,cy,140);gr.addColorStop(0,"rgba(255,236,180,.9)");gr.addColorStop(1,"rgba(255,236,180,0)");sx.fillStyle=gr;sx.fillRect(0,0,SW,SH);
+      sx.fillStyle="rgba(255,244,214,.95)";sx.beginPath();sx.arc(cx,cy,34,0,7);sx.fill();
+      sx.strokeStyle="rgba(255,244,214,.5)";sx.lineWidth=2;for(let i=0;i<12;i++){const a=i/12*6.283+t/6000;sx.beginPath();sx.moveTo(cx+Math.cos(a)*46,cy+Math.sin(a)*46);sx.lineTo(cx+Math.cos(a)*58,cy+Math.sin(a)*58);sx.stroke()}}
+    else{sx.fillStyle="rgba(235,240,250,.9)";sx.beginPath();sx.arc(cx,cy,26,0,7);sx.fill();sx.fillStyle=css("--sky-top");sx.beginPath();sx.arc(cx+11,cy-6,23,0,7);sx.fill();
+      for(let i=0;i<40;i++){const p=parts[i];sx.fillStyle=`rgba(255,255,255,${.3+.3*Math.sin(t/700+i)})`;sx.fillRect(p.x,p.y*.6,1.5,1.5)}}}
+  // clouds
+  const cn=k==="clear"?2:k==="fog"?7:Math.max(3,Math.round(sc.cloud/14));
+  for(let i=0;i<cn&&i<clouds.length;i++){const c=clouds[i];c.x+=vx*.25*(i%2?1:.7);if(c.x>SW+c.w)c.x=-c.w;if(c.x<-c.w)c.x=SW+c.w;
+    const dark=k==="rain"||k==="storm"?.55:1;sx.fillStyle=`rgba(${255*dark},${255*dark},${255*dark},${c.o})`;puff(c.x,c.y,c.w)}
+  if(k==="fog"){sx.fillStyle="rgba(255,255,255,.18)";for(let i=0;i<5;i++){const y=SH*(.35+i*.13)+Math.sin(t/2000+i)*6;sx.fillRect(0,y,SW,14)}}
+  // precipitation
+  if(k==="rain"||k==="storm"){const n=Math.min(220,60+sc.precip*900+(k==="storm"?80:0));sx.strokeStyle="rgba(220,235,255,.55)";sx.lineWidth=1.2;
+    for(let i=0;i<n;i++){const p=parts[i];p.y+=9*p.s;p.x+=vx*1.4;if(p.y>SH){p.y=-10;p.x=Math.random()*SW}if(p.x>SW)p.x=0;if(p.x<0)p.x=SW;
+      sx.beginPath();sx.moveTo(p.x,p.y);sx.lineTo(p.x-vx*2,p.y-12*p.s);sx.stroke()}}
+  if(k==="snow"){sx.fillStyle="rgba(255,255,255,.85)";for(let i=0;i<160;i++){const p=parts[i];p.y+=1.2*p.s;p.x+=vx*.6+Math.sin(t/900+i)*.4;if(p.y>SH){p.y=-4;p.x=Math.random()*SW}if(p.x>SW)p.x=0;if(p.x<0)p.x=SW;sx.beginPath();sx.arc(p.x,p.y,p.r,0,7);sx.fill()}}
+  if(k==="storm"){if(Math.random()<.004)flash=1;if(flash>0){sx.fillStyle=`rgba(255,255,255,${flash*.5})`;sx.fillRect(0,0,SW,SH);flash-=.06}}
+  // wind streaks
+  if(k!=="rain"&&k!=="storm"&&k!=="snow"&&sc.wind>6){sx.strokeStyle="rgba(255,255,255,.35)";sx.lineWidth=1.4;const n=Math.min(26,sc.wind);
+    for(let i=0;i<n;i++){const p=parts[100+i];p.x+=vx*3;if(p.x>SW+80)p.x=-80;if(p.x<-80)p.x=SW+80;const y=p.y+Math.sin(t/500+i)*4,L=30+sc.wind*2;
+      sx.beginPath();sx.moveTo(p.x,y);sx.quadraticCurveTo(p.x-Math.sign(vx)*L/2,y-4,p.x-Math.sign(vx)*L,y);sx.stroke()}}
+}
+function puff(x,y,w){sx.beginPath();sx.ellipse(x,y,w*.5,w*.18,0,0,7);sx.ellipse(x-w*.18,y-w*.08,w*.22,w*.16,0,0,7);sx.ellipse(x+w*.14,y-w*.11,w*.26,w*.19,0,0,7);sx.fill()}
+
+/* ---------- animated river ---------- */
+const rv=$("river");let rx,RW,RH,rlines=[];
+function initRiver(){[rx,RW,RH]=fit(rv);rlines=Array.from({length:34},()=>({x:Math.random()*RW,y:6+Math.random()*(RH-12),l:14+Math.random()*40,s:.6+Math.random()*.8}))}
+function drawRiver(t){
+  rx.clearRect(0,0,RW,RH);const f=state.river?state.river.flow:150;const sp=.3+Math.min(6,Math.sqrt(f)/7);const col=css("--river");
+  rx.strokeStyle=col;rx.lineCap="round";
+  for(let i=0;i<4;i++){rx.globalAlpha=.18;rx.lineWidth=1.5;rx.beginPath();for(let x=0;x<=RW;x+=8){const y=RH*(.2+i*.2)+Math.sin(x/40-t/600*sp+i)*3;x?rx.lineTo(x,y):rx.moveTo(x,y)}rx.stroke()}
+  rx.globalAlpha=.75;rx.lineWidth=2;
+  for(const p of rlines){p.x+=sp*p.s;if(p.x-p.l>RW){p.x=-4;p.y=6+Math.random()*(RH-12)}const y=p.y+Math.sin(p.x/30)*2;rx.beginPath();rx.moveTo(p.x,y);rx.lineTo(p.x-p.l,y);rx.stroke()}
+  rx.globalAlpha=1;rx.fillStyle=css("--ink");rx.font="500 11px IBM Plex Mono, monospace";rx.fillText("Flow toward Boston Harbor  >",10,RH-8);
+}
+
+/* ---------- Head of the Charles course map ---------- */
+// Upstream, start to finish. Bridge points from published coordinates; bends approximated.
+const COURSE=[[42.3536,-71.1040],[42.3529,-71.1072],[42.35238,-71.11066],[42.3530,-71.1135],[42.3548,-71.1165],[42.3575,-71.1178],
+  [42.3612,-71.1170],[42.36422,-71.11690],[42.3668,-71.1170],[42.36853,-71.11807],[42.3690,-71.1205],[42.3689,-71.1232],
+  [42.3686,-71.1258],[42.3690,-71.1282],[42.3700,-71.1303],[42.3718,-71.1328],[42.3724,-71.1348]];
+const MARKS=[["Start",COURSE[0],true,"right"],["BU Bridge",[42.35238,-71.11066],false,"left"],["River Street Bridge",[42.3612,-71.1170],false,"left"],
+  ["Western Ave Bridge",[42.36422,-71.11690],false,"right"],["Weeks Footbridge",[42.36853,-71.11807],false,"right"],
+  ["Anderson Bridge",[42.3689,-71.1232],false,"bottom"],["Eliot Bridge",[42.3718,-71.1328],false,"right"],["Finish",COURSE[COURSE.length-1],true,"left"]];
+let map=null,courseGroup=null,hourOff=0;
+const wl={ctx:null,W:0,H:0,parts:[],vx:null,vy:0,speed:0,gust:0,col:"#F2FBFD",sat:true};
+
+function initMap(){
+  if(!window.L){$("map").innerHTML='<p class="err" style="padding:16px">The map library did not load. Check your connection and refresh.</p>';return}
+  map=L.map("map",{zoomSnap:.5}).fitBounds(L.latLngBounds(COURSE),{padding:[30,30]});
+  const dark=matchMedia("(prefers-color-scheme: dark)").matches;
+  const street=L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark?"dark_all":"rastertiles/voyager"}/{z}/{x}/{y}{r}.png`,
+    {subdomains:"abcd",maxZoom:19,attribution:'&copy; OpenStreetMap contributors &copy; CARTO'});
+  const imagery=L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    {maxZoom:19,maxNativeZoom:19,attribution:"Imagery &copy; Esri, Maxar, Earthstar Geographics"});
+  const labels=L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png",
+    {subdomains:"abcd",maxZoom:19,opacity:.9,attribution:"&copy; CARTO"});
+  const satellite=L.layerGroup([imagery,labels]).addTo(map);
+  L.control.layers({"Satellite":satellite,"Street map":street},null,{position:"topleft",collapsed:false}).addTo(map);
+  map.on("baselayerchange",e=>{wl.sat=e.name==="Satellite";wl.col=wl.sat?"#F2FBFD":css("--particle");if(wl.ctx)wl.ctx.clearRect(0,0,wl.W,wl.H);if(reduce)drawWindStatic()});
+  courseGroup=L.layerGroup().addTo(map);
+  MARKS.forEach(([n,ll,end,dir])=>L.circleMarker(ll,{radius:end?6:4,color:css("--ink"),weight:2,fillColor:end?css("--ink"):css("--surface"),fillOpacity:1,pane:"markerPane"})
+    .addTo(map).bindTooltip(n,{permanent:true,direction:dir,offset:dir==="left"?[-8,0]:dir==="right"?[8,0]:[0,8],className:"lm"+(end?" end":"")}));
+  const badge=L.control({position:"topright"});badge.onAdd=()=>{const d=L.DomUtil.create("div","wind-badge");d.id="windBadge";return d};badge.addTo(map);
+  const re=L.control({position:"bottomleft"});
+  re.onAdd=()=>{const b=L.DomUtil.create("button","map-btn");b.type="button";b.textContent="Recenter course";L.DomEvent.disableClickPropagation(b);
+    b.onclick=()=>map.fitBounds(L.latLngBounds(COURSE),{padding:[30,30]});return b};re.addTo(map);
+  map.on("move zoom",()=>{if(wl.ctx){wl.ctx.clearRect(0,0,wl.W,wl.H);if(reduce)drawWindStatic()}});
+  initWind();
+}
+function initWind(){const [c,W,H]=fit($("windLayer"));Object.assign(wl,{ctx:c,W,H});wl.parts=Array.from({length:Math.round(W*H/700)},newP)}
+function newP(){return {x:Math.random()*wl.W,y:Math.random()*wl.H,age:Math.random()*60|0,max:50+Math.random()*70,s:.7+Math.random()*.6}}
+function brg(a,b){const r=Math.PI/180,p1=a[0]*r,p2=b[0]*r,dl=(b[1]-a[1])*r;
+  return (Math.atan2(Math.sin(dl)*Math.cos(p2),Math.cos(p1)*Math.sin(p2)-Math.sin(p1)*Math.cos(p2)*Math.cos(dl))/r+360)%360}
+function dist(a,b){const r=Math.PI/180,dla=(b[0]-a[0])*r,dlo=(b[1]-a[1])*r;
+  const h=Math.sin(dla/2)**2+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.sin(dlo/2)**2;return 12742e3*Math.asin(Math.sqrt(h))}
+
+function updateCourse(){
+  const w=state.wx;if(!w)return;const h=w.hourly,i0=hourIndexNow(h),i=Math.min(h.time.length-1,i0+hourOff);
+  const spd=h.wind_speed_10m[i],gst=h.wind_gusts_10m[i],from=h.wind_direction_10m[i],t=new Date(h.time[i]);
+  $("hourRead").innerHTML=`<b>${hourOff===0?"Now":t.toLocaleString([],{weekday:"short",hour:"numeric"})}</b>&nbsp; ${Math.round(spd)} mph from the ${compassName(from)}, gusts ${Math.round(gst)}`;
+  const to=(from+180)*Math.PI/180;Object.assign(wl,{vx:Math.sin(to),vy:-Math.cos(to),speed:spd,gust:gst,col:wl.sat?"#F2FBFD":css("--particle")});
+  const b=$("windBadge");
+  if(b)b.innerHTML=`<svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="20" fill="none" stroke="var(--line)" stroke-width="2"/><g transform="rotate(${(from+180)%360} 22 22)"><path d="M22 5 L29 21 L22 17 L15 21 Z" fill="var(--wind)"/><line x1="22" y1="17" x2="22" y2="37" stroke="var(--wind)" stroke-width="3" stroke-linecap="round"/></g></svg><div><b>${Math.round(spd)} mph</b>from ${compassName(from)}, gusts ${Math.round(gst)}</div>`;
+  // classify each stretch: wind coming from ahead = headwind
+  const tot={head:0,cross:0,tail:0},segs=[];
+  for(let k=1;k<COURSE.length;k++){const a=COURSE[k-1],c=COURSE[k],d=Math.abs(((from-brg(a,c)+540)%360)-180);
+    const cls=d<=45?"head":d>=135?"tail":"cross";tot[cls]+=dist(a,c);segs.push([a,c,cls])}
+  const all=tot.head+tot.cross+tot.tail,pc=k=>Math.round(tot[k]/all*100);
+  $("pHead").textContent=pc("head")+"%";$("pCross").textContent=pc("cross")+"%";$("pTail").textContent=pc("tail")+"%";
+  const sp=$("split").children;sp[0].style.width=pc("head")+"%";sp[1].style.width=pc("cross")+"%";sp[2].style.width=pc("tail")+"%";
+  const top=Object.keys(tot).sort((x,y)=>tot[y]-tot[x])[0];
+  if(spd<6)setPill("coursePill","Light air","");
+  else setPill("coursePill",{head:"Mostly headwind",cross:"Mostly crosswind",tail:"Mostly tailwind"}[top]+(spd>=15?", rough":""),spd>=15?"bad":top==="head"||top==="cross"?"warn":"");
+  if(map){courseGroup.clearLayers();
+    segs.forEach(([a,c])=>L.polyline([a,c],{color:css("--surface"),weight:12,opacity:.95,lineCap:"round",interactive:false}).addTo(courseGroup));
+    segs.forEach(([a,c,cls])=>L.polyline([a,c],{color:css("--"+cls),weight:7,lineCap:"round"}).bindTooltip({head:"Headwind",cross:"Crosswind",tail:"Tailwind"}[cls]+" on this stretch",{sticky:true}).addTo(courseGroup))}
+  if(reduce)drawWindStatic();
+}
+function drawWind(){
+  const c=wl.ctx;if(!c||wl.vx==null)return;
+  c.globalCompositeOperation="destination-in";c.fillStyle="rgba(0,0,0,.9)";c.fillRect(0,0,wl.W,wl.H);c.globalCompositeOperation="source-over";
+  c.strokeStyle=wl.col;c.lineWidth=1.5;c.globalAlpha=.8;c.beginPath();
+  const base=.35+wl.speed*.11,gf=Math.max(0,(wl.gust-wl.speed)/Math.max(wl.speed,1)),now=performance.now();
+  for(const p of wl.parts){const s=base*p.s*(1+gf*.45*Math.sin(now/800+p.y*.015+p.x*.004))*2;
+    const nx=p.x+wl.vx*s,ny=p.y+wl.vy*s;c.moveTo(p.x,p.y);c.lineTo(nx,ny);p.x=nx;p.y=ny;
+    if(++p.age>p.max||nx<0||ny<0||nx>wl.W||ny>wl.H)Object.assign(p,newP(),{age:0})}
+  c.stroke();c.globalAlpha=1;
+}
+function drawWindStatic(){
+  const c=wl.ctx;if(!c||wl.vx==null)return;c.clearRect(0,0,wl.W,wl.H);c.strokeStyle=wl.col;c.globalAlpha=.6;c.lineWidth=1.6;
+  const L2=10+Math.min(14,wl.speed);
+  for(let y=40;y<wl.H;y+=70)for(let x=40;x<wl.W;x+=70){const ex=x+wl.vx*L2,ey=y+wl.vy*L2;c.beginPath();c.moveTo(x-wl.vx*L2,y-wl.vy*L2);c.lineTo(ex,ey);
+    c.lineTo(ex-wl.vx*6+wl.vy*4,ey-wl.vy*6-wl.vx*4);c.moveTo(ex,ey);c.lineTo(ex-wl.vx*6-wl.vy*4,ey-wl.vy*6+wl.vx*4);c.stroke()}
+  c.globalAlpha=1;
+}
+$("hourSlider").addEventListener("input",e=>{hourOff=+e.target.value;updateCourse()});
+
+function loop(t){drawSky(t);drawRiver(t);drawWind();if(!reduce)requestAnimationFrame(loop)}
+
+/* ---------- boot ---------- */
+async function load(){
+  $("updated").textContent="Updating";
+  const [w,al,rv]=await Promise.allSettled([getWeather(),getAlerts(),getRiver()]);
+  if(w.status==="fulfilled"){state.wx=w.value;renderWeather(w.value)}else{$("nowCond").textContent="Forecast unavailable. Check your connection and press Refresh."}
+  al.status==="fulfilled"?renderAlerts(al.value):renderAlerts([],al.reason.message);
+  rv.status==="fulfilled"?renderRiver(rv.value):riverErr(rv.reason.message||"River gauge data is not available right now");
+  renderWater();
+  $("updated").textContent="Updated "+new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+  if(reduce){drawSky(0);drawRiver(0)}
+}
+$("refresh").addEventListener("click",load);
+let rt;addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(()=>{initSky();initRiver();drawChart();drawSpark();if(map){map.invalidateSize();initWind();updateCourse()}if(reduce){drawSky(0);drawRiver(0)}},150)});
+initSky();initRiver();initMap();requestAnimationFrame(loop);load();setInterval(load,10*60*1000);
+</script>
+</body>
+</html>
