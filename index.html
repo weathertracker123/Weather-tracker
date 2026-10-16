@@ -244,7 +244,7 @@ footer a{color:var(--river)}
         <span><i style="background:var(--cross)"></i>Crosswind <b id="pCross">--</b></span>
         <span><i style="background:var(--tail)"></i>Tailwind <b id="pTail">--</b></span>
       </div>
-      <p class="note">Course colors show the wind each stretch faces while racing upstream from the start to the finish. Drag the map to move around, and scroll or pinch to zoom. The course line is approximate, drawn through the bridge positions. Wind streaks travel at the true ground speed for the current zoom, multiplied by the playback rate in the map corner, and gusts sweep through as faster bands.</p>
+      <p class="note">Course colors show the wind each stretch faces while racing upstream from the start to the finish. Drag the map to move around, and scroll or pinch to zoom. The course line follows the river's centerline from OpenStreetMap over the 3-mile course. Wind streaks travel at the true ground speed for the current zoom, multiplied by the playback rate in the map corner, and gusts sweep through as faster bands.</p>
     </div>
   </section>
 
@@ -265,7 +265,7 @@ footer a{color:var(--river)}
     <span>Forecast: <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a></span>
     <span>Warnings: <a href="https://www.weather.gov/box/" target="_blank" rel="noopener">National Weather Service, Boston/Norton</a></span>
     <span>River: <a href="https://waterdata.usgs.gov/monitoring-location/01104500/" target="_blank" rel="noopener">USGS 01104500</a> (provisional data)</span>
-    <span>Map: &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>; satellite imagery &copy; Esri, Maxar, Earthstar Geographics</span>
+    <span>Map: &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, satellite imagery &copy; Esri, Maxar, Earthstar Geographics</span>
     <span>Refreshes every 10 minutes.</span>
   </footer>
 </div>
@@ -529,13 +529,11 @@ function drawRiver(t){
 }
 
 /* ---------- Head of the Charles course map ---------- */
-// Upstream, start to finish. Bridge points from published coordinates; bends approximated.
-const COURSE=[[42.3536,-71.1040],[42.3529,-71.1072],[42.35238,-71.11066],[42.3530,-71.1135],[42.3548,-71.1165],[42.3575,-71.1178],
-  [42.3612,-71.1170],[42.36422,-71.11690],[42.3668,-71.1170],[42.36853,-71.11807],[42.3690,-71.1205],[42.3689,-71.1232],
-  [42.3686,-71.1258],[42.3690,-71.1282],[42.3700,-71.1303],[42.3718,-71.1328],[42.3724,-71.1348]];
-const MARKS=[["Start",COURSE[0],true,"right"],["BU Bridge",[42.35238,-71.11066],false,"left"],["River Street Bridge",[42.3612,-71.1170],false,"left"],
-  ["Western Ave Bridge",[42.36422,-71.11690],false,"right"],["Weeks Footbridge",[42.36853,-71.11807],false,"right"],
-  ["Anderson Bridge",[42.3689,-71.1232],false,"bottom"],["Eliot Bridge",[42.3718,-71.1328],false,"right"],["Finish",COURSE[COURSE.length-1],true,"left"]];
+// Charles River centerline from OpenStreetMap, clipped to a 3-mile course, start (below BU Bridge) to finish (Herter Park), upstream.
+const COURSE=[[42.3525,-71.10748],[42.35251,-71.10782],[42.35255,-71.10922],[42.35255,-71.11008],[42.35259,-71.11035],[42.35261,-71.11052],[42.35263,-71.11061],[42.35264,-71.11074],[42.35274,-71.11151],[42.3529,-71.11246],[42.35312,-71.11321],[42.35345,-71.11409],[42.35386,-71.11492],[42.35453,-71.11591],[42.35503,-71.11652],[42.35539,-71.11685],[42.35587,-71.11707],[42.35637,-71.11714],[42.357,-71.11717],[42.35755,-71.11707],[42.35853,-71.11673],[42.35884,-71.11665],[42.35918,-71.1166],[42.35957,-71.11658],[42.36009,-71.11661],[42.36118,-71.1167],[42.36125,-71.11671],[42.36127,-71.11671],[42.36275,-71.11684],[42.36368,-71.11694],[42.36425,-71.11692],[42.36531,-71.11689],[42.36589,-71.11687],[42.36665,-71.11697],[42.36693,-71.11705],[42.36703,-71.11708],[42.36737,-71.11723],[42.36787,-71.11754],[42.36815,-71.11769],[42.36838,-71.11793],[42.36847,-71.11809],[42.36851,-71.11816],[42.36853,-71.11819],[42.36864,-71.11852],[42.36876,-71.11896],[42.36884,-71.11955],[42.36882,-71.12009],[42.36878,-71.12076],[42.36872,-71.12134],[42.36871,-71.12157],[42.3687,-71.12178],[42.36871,-71.12197],[42.36872,-71.12214],[42.36873,-71.1223],[42.36875,-71.12246],[42.36878,-71.12262],[42.36881,-71.12275],[42.36886,-71.12295],[42.36891,-71.1231],[42.36896,-71.1232],[42.36901,-71.1233],[42.36945,-71.12428],[42.36952,-71.1244],[42.36958,-71.12451],[42.36965,-71.12459],[42.36974,-71.12468],[42.36982,-71.12475],[42.36992,-71.12481],[42.37095,-71.12537],[42.3712,-71.12552],[42.37146,-71.12569],[42.37171,-71.12586],[42.3719,-71.126],[42.37206,-71.12613],[42.37221,-71.12626],[42.37237,-71.12641],[42.37252,-71.12658],[42.37268,-71.12679],[42.37287,-71.12705],[42.37307,-71.12732],[42.37326,-71.12761],[42.3734,-71.12785],[42.37353,-71.12809],[42.37364,-71.12831],[42.37372,-71.1285],[42.37378,-71.12867],[42.37384,-71.12886],[42.37388,-71.12906],[42.37392,-71.12929],[42.37394,-71.12954],[42.37396,-71.12982],[42.37397,-71.13008],[42.37397,-71.13034],[42.37397,-71.13058],[42.37394,-71.13082],[42.37391,-71.13104],[42.37387,-71.13127],[42.37382,-71.13149],[42.37375,-71.1317],[42.37368,-71.1319],[42.37359,-71.13211],[42.37348,-71.13231],[42.37338,-71.13247],[42.37329,-71.1326],[42.37319,-71.13272],[42.37308,-71.13283],[42.37293,-71.13296],[42.37282,-71.13305],[42.37271,-71.13312],[42.3726,-71.13316],[42.3725,-71.13319],[42.37238,-71.1332],[42.37227,-71.1332],[42.37216,-71.13318],[42.37194,-71.13307],[42.37184,-71.133],[42.37141,-71.13261],[42.37123,-71.13245],[42.37106,-71.13231],[42.3709,-71.13218],[42.37072,-71.13206],[42.37054,-71.13196],[42.37036,-71.13189],[42.37016,-71.13182],[42.37,-71.13178],[42.36985,-71.13176],[42.36972,-71.13178],[42.36957,-71.13183],[42.36944,-71.13191],[42.36929,-71.13202],[42.36911,-71.13217],[42.36893,-71.13236],[42.36875,-71.13257],[42.36851,-71.13289],[42.36828,-71.13324],[42.36813,-71.1335],[42.36798,-71.13377],[42.36784,-71.13406],[42.36772,-71.13434],[42.36762,-71.13466],[42.36741,-71.13533],[42.36732,-71.13561],[42.36721,-71.13591],[42.36707,-71.13618],[42.36692,-71.13643],[42.36682,-71.13658]];
+const MARKS=[["Start",COURSE[0],true,"right"],["BU Bridge",[42.35263,-71.11061],false,"bottom"],["River Street Bridge",[42.36125,-71.11671],false,"left"],
+  ["Western Ave Bridge",[42.36425,-71.11692],false,"right"],["Weeks Footbridge",[42.36853,-71.11819],false,"right"],
+  ["Anderson Bridge",[42.36896,-71.1232],false,"bottom"],["Eliot Bridge",[42.37184,-71.133],false,"right"],["Finish",COURSE[COURSE.length-1],true,"left"]];
 let map=null,courseGroup=null,hourOff=0;
 const wl={ctx:null,W:0,H:0,parts:[],vx:null,vy:0,speed:0,gust:0,col:"#F2FBFD",sat:true,mult:20};
 
@@ -543,13 +541,13 @@ function initMap(){
   if(!window.L){$("map").innerHTML='<p class="err" style="padding:16px">The map library did not load. Check your connection and refresh.</p>';return}
   map=L.map("map",{zoomSnap:.5}).fitBounds(L.latLngBounds(COURSE),{padding:[30,30]});
   const dark=matchMedia("(prefers-color-scheme: dark)").matches;
-  const street=L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark?"dark_all":"rastertiles/voyager"}/{z}/{x}/{y}{r}.png`,
-    {subdomains:"abcd",maxZoom:19,attribution:'&copy; OpenStreetMap contributors &copy; CARTO'});
-  const imagery=L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    {maxZoom:19,maxNativeZoom:19,attribution:"Imagery &copy; Esri, Maxar, Earthstar Geographics"});
-  const labels=L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png",
-    {subdomains:"abcd",maxZoom:19,opacity:.9,attribution:"&copy; CARTO"});
-  const satellite=L.layerGroup([imagery,labels]).addTo(map);
+  const street=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'});
+  const esri=s=>`https://server.arcgisonline.com/ArcGIS/rest/services/${s}/MapServer/tile/{z}/{y}/{x}`;
+  const imagery=L.tileLayer(esri("World_Imagery"),{maxZoom:19,attribution:"Imagery &copy; Esri, Maxar, Earthstar Geographics"});
+  const roads=L.tileLayer(esri("Reference/World_Transportation"),{maxZoom:19,opacity:.55});
+  const places=L.tileLayer(esri("Reference/World_Boundaries_and_Places"),{maxZoom:19});
+  const satellite=L.layerGroup([imagery,roads,places]).addTo(map);
   L.control.layers({"Satellite":satellite,"Street map":street},null,{position:"topleft",collapsed:false}).addTo(map);
   map.on("baselayerchange",e=>{wl.sat=e.name==="Satellite";wl.col=wl.sat?"#F2FBFD":css("--particle");if(wl.ctx)wl.ctx.clearRect(0,0,wl.W,wl.H);if(reduce)drawWindStatic()});
   courseGroup=L.layerGroup().addTo(map);
@@ -567,9 +565,14 @@ function initMap(){
   rate.addTo(map);
   map.on("move zoom",()=>{if(wl.ctx){wl.ctx.clearRect(0,0,wl.W,wl.H);if(reduce)drawWindStatic()}});
   initWind();
+  // The map can be created before the page finishes laying out; refit once it has its real size.
+  const refit=()=>{map.invalidateSize();map.fitBounds(L.latLngBounds(COURSE),{padding:[24,24]});initWind()};
+  let fitted=false;
+  new ResizeObserver(()=>{const s=$("map").getBoundingClientRect();if(s.width>0&&s.height>0){if(!fitted){fitted=true;refit()}else{map.invalidateSize();initWind()}}}).observe($("map"));
+  addEventListener("load",refit);
 }
-function initWind(){const [c,W,H]=fit($("windLayer"));Object.assign(wl,{ctx:c,W,H});wl.parts=Array.from({length:Math.round(W*H/700)},newP)}
-function newP(){return {x:Math.random()*wl.W,y:Math.random()*wl.H,age:Math.random()*90|0,max:80+Math.random()*100,s:.7+Math.random()*.6}}
+function initWind(){const [c,W,H]=fit($("windLayer"));Object.assign(wl,{ctx:c,W,H});wl.parts=Array.from({length:Math.round(W*H/1600)},newP)}
+function newP(){const max=2+Math.random()*3;return {x:Math.random()*wl.W,y:Math.random()*wl.H,age:Math.random()*max,max,s:.7+Math.random()*.6}}
 function brg(a,b){const r=Math.PI/180,p1=a[0]*r,p2=b[0]*r,dl=(b[1]-a[1])*r;
   return (Math.atan2(Math.sin(dl)*Math.cos(p2),Math.cos(p1)*Math.sin(p2)-Math.sin(p1)*Math.cos(p2)*Math.cos(dl))/r+360)%360}
 function dist(a,b){const r=Math.PI/180,dla=(b[0]-a[0])*r,dlo=(b[1]-a[1])*r;
@@ -593,8 +596,11 @@ function updateCourse(){
   if(spd<6)setPill("coursePill","Light air","");
   else setPill("coursePill",{head:"Mostly headwind",cross:"Mostly crosswind",tail:"Mostly tailwind"}[top]+(spd>=15?", rough":""),spd>=15?"bad":top==="head"||top==="cross"?"warn":"");
   if(map){courseGroup.clearLayers();
-    segs.forEach(([a,c])=>L.polyline([a,c],{color:css("--surface"),weight:12,opacity:.95,lineCap:"round",interactive:false}).addTo(courseGroup));
-    segs.forEach(([a,c,cls])=>L.polyline([a,c],{color:css("--"+cls),weight:7,lineCap:"round"}).bindTooltip({head:"Headwind",cross:"Crosswind",tail:"Tailwind"}[cls]+" on this stretch",{sticky:true}).addTo(courseGroup))}
+    L.polyline(COURSE,{color:"#0B1419",weight:11,opacity:.7,lineCap:"round",lineJoin:"round",interactive:false}).addTo(courseGroup);
+    // merge consecutive stretches with the same wind into one line
+    const runs=[];segs.forEach(([a,c,cls])=>{const r=runs[runs.length-1];if(r&&r.cls===cls)r.pts.push(c);else runs.push({cls,pts:[a,c]})});
+    runs.forEach(r=>L.polyline(r.pts,{color:css("--"+r.cls),weight:6,lineCap:"round",lineJoin:"round"})
+      .bindTooltip({head:"Headwind",cross:"Crosswind",tail:"Tailwind"}[r.cls]+" on this stretch",{sticky:true}).addTo(courseGroup))}
   if(reduce)drawWindStatic();
 }
 // Real-scale wind: streaks move at the true ground speed for the current zoom, times the chosen playback rate.
@@ -603,19 +609,21 @@ function metersPerPixel(){const lat=map.getCenter().lat;return 40075016.686*Math
 function drawWind(){
   const c=wl.ctx,now=performance.now(),dt=Math.min(.1,(now-(lastWind||now))/1000);lastWind=now;
   if(!c||wl.vx==null||!map)return;
-  c.globalCompositeOperation="destination-in";c.fillStyle=`rgba(0,0,0,${Math.pow(.9,dt*60)})`;c.fillRect(0,0,wl.W,wl.H);c.globalCompositeOperation="source-over";
-  c.strokeStyle=wl.col;c.lineWidth=1.5;c.globalAlpha=.85;c.beginPath();
+  c.clearRect(0,0,wl.W,wl.H);
+  c.strokeStyle=wl.col;c.lineWidth=1.8;c.lineCap="round";
   const mpp=metersPerPixel(),toPx=v=>v*0.44704/mpp*wl.mult; // mph -> m/s -> px/s
   const sus=toPx(wl.speed),gus=toPx(Math.max(wl.gust,wl.speed));
   // gust bands: pulses that ride downwind across the map at the gust speed
   const band=Math.max(120,gus*6),tsec=now/1000;
+  // each streak's tail shows how far that air travels in about one second of playback, so length scales with speed
   for(const p of wl.parts){
     const along=p.x*wl.vx+p.y*wl.vy,g=Math.pow(Math.max(0,Math.sin((along-gus*tsec)/band*Math.PI*2)),3);
-    const s=(sus+(gus-sus)*g)*(.92+.16*p.s/1.3)*dt;
-    const nx=p.x+wl.vx*s,ny=p.y+wl.vy*s;c.moveTo(p.x,p.y);c.lineTo(nx,ny);p.x=nx;p.y=ny;
-    p.age+=dt*60*Math.min(1,Math.max(.15,wl.mult/20)); // slower playback keeps streaks alive longer
-    if(p.age>p.max||nx<0||ny<0||nx>wl.W||ny>wl.H)Object.assign(p,newP(),{age:0})}
-  c.stroke();c.globalAlpha=1;
+    const v=(sus+(gus-sus)*g)*(.92+.16*p.s/1.3),s=v*dt,tail=Math.max(5,Math.min(90,v*.9));
+    p.x+=wl.vx*s;p.y+=wl.vy*s;p.age+=dt;
+    const life=p.age/p.max;c.globalAlpha=Math.sin(Math.PI*Math.min(1,life))*(.55+.4*g);
+    c.beginPath();c.moveTo(p.x-wl.vx*tail,p.y-wl.vy*tail);c.lineTo(p.x,p.y);c.stroke();
+    if(life>=1||p.x<-90||p.y<-90||p.x>wl.W+90||p.y>wl.H+90)Object.assign(p,newP(),{age:0})}
+  c.globalAlpha=1;
 }
 function drawWindStatic(){
   const c=wl.ctx;if(!c||wl.vx==null)return;c.clearRect(0,0,wl.W,wl.H);c.strokeStyle=wl.col;c.globalAlpha=.6;c.lineWidth=1.6;
