@@ -28,6 +28,7 @@
   --river:#4FB3C5; --river-soft:#16323A; --warn:#E89A4B; --warn-soft:#33251A; --danger:#E5686B; --danger-soft:#3A1C1E;
   --temp:#E8825E; --rain:#6FA6E0; --wind:#4FB3C5; --head:#F06A5E; --cross:#F0B04A; --tail:#5FC08A; --particle:#DDF4F8; --sky-top:#1B2C3B; --sky-bot:#2C4255; color-scheme:dark}}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--body)}
 .wrap{max-width:1180px;margin:0 auto;padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px;display:grid;gap:20px}
@@ -127,6 +128,12 @@ h1,h2,h3{margin:0;text-wrap:balance}
 .course-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 20px;align-items:center}
 @media (max-width:640px){.course-controls{grid-template-columns:1fr}}
 #hourSlider{width:100%;accent-color:var(--river)}
+.ctl-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:4px}
+.play{appearance:none;border:0;background:var(--ink);color:var(--bg);border-radius:999px;padding:8px 16px 8px 12px;font:600 14px var(--body);display:inline-flex;gap:8px;align-items:center;cursor:pointer}
+.play svg{width:14px;height:14px}
+.play:focus-visible{outline:2px solid var(--river);outline-offset:2px}
+.rainbar{height:12px;border-radius:999px;background:linear-gradient(90deg,rgb(90,170,255),rgb(40,200,120) 25%,rgb(250,220,40) 45%,rgb(250,140,30) 65%,rgb(230,50,40) 85%,rgb(190,40,160))}
+.rainticks{display:flex;justify-content:space-between;font:500 12px var(--mono);color:var(--muted)}
 .hour-read{font:500 14px var(--body)}
 .hour-read b{font-family:var(--mono);font-weight:500}
 .split{display:flex;height:12px;border-radius:999px;overflow:hidden;background:var(--line)}
@@ -232,12 +239,25 @@ footer a{color:var(--river)}
     </div>
     <div class="course-controls">
       <div style="display:grid;gap:6px">
+        <div class="ctl-row">
+          <div class="tabs" role="tablist" aria-label="Map layer">
+            <button class="tab" role="tab" id="m-wind" data-m="wind" aria-selected="true">Wind</button>
+            <button class="tab" role="tab" id="m-rain" data-m="rain" aria-selected="false">Precipitation</button>
+          </div>
+          <button class="play" id="playBtn" type="button" aria-pressed="false"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg><span>Play 48 hours</span></button>
+        </div>
         <label class="label" for="hourSlider">Scrub the next 48 hours</label>
         <input type="range" id="hourSlider" min="0" max="47" value="0" step="1">
       </div>
       <div class="hour-read" id="hourRead">--</div>
     </div>
-    <div style="display:grid;gap:8px">
+    <div style="display:grid;gap:8px" id="rainLegend" hidden>
+      <div class="label">Forecast precipitation rate, inches per hour</div>
+      <div class="rainbar" aria-hidden="true"></div>
+      <div class="rainticks"><span>0.01</span><span>0.05</span><span>0.1</span><span>0.25</span><span>0.5</span><span>1+</span></div>
+      <p class="note">Colors show the hourly forecast across greater Boston, blended between forecast points about 3 miles apart. Rain streaks get denser where it is heavier and drift with the wind.</p>
+    </div>
+    <div style="display:grid;gap:8px" id="windLegend">
       <div class="split" id="split" aria-hidden="true"><span style="background:var(--head)"></span><span style="background:var(--cross)"></span><span style="background:var(--tail)"></span></div>
       <div class="legend" id="legend">
         <span><i style="background:var(--head)"></i>Headwind <b id="pHead">--</b></span>
@@ -479,14 +499,14 @@ $("chart").addEventListener("mousemove",e=>{
   tip.textContent=`${t}  ${g.S.fmt(g.v[i])}${g.a?"  /  "+g.S.fmt(g.a[i]):""}`;
 });
 $("chart").addEventListener("mouseleave",()=>$("tip").hidden=true);
-document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{
-  document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-selected",t===b));state.tab=b.dataset.k;drawChart()}));
+document.querySelectorAll(".tab[data-k]").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll(".tab[data-k]").forEach(t=>t.setAttribute("aria-selected",t===b));state.tab=b.dataset.k;drawChart()}));
 
 /* ---------- animated sky ---------- */
 const sky=$("sky");let sx,SW,SH,parts=[],clouds=[],flash=0;
 function initSky(){[sx,SW,SH]=fit(sky);
   parts=Array.from({length:220},()=>({x:Math.random()*SW,y:Math.random()*SH,s:.6+Math.random()*.8,r:Math.random()*2+1}));
-  clouds=Array.from({length:7},(_,i)=>({x:Math.random()*SW,y:20+Math.random()*SH*.5,w:120+Math.random()*200,o:.25+Math.random()*.35}))}
+  clouds=Array.from({length:7},(_,i)=>({x:Math.random()*SW,y:20+Math.random()*SH*.5,w:120+Math.random()*200,o:.35+Math.random()*.35}))}
 function drawSky(t){
   const sc=state.scene,k=sc.kind; sx.clearRect(0,0,SW,SH);
   // wind vector: direction is where wind comes FROM; screen x uses east-west component
@@ -504,13 +524,13 @@ function drawSky(t){
     const dark=k==="rain"||k==="storm"?.55:1;sx.fillStyle=`rgba(${255*dark},${255*dark},${255*dark},${c.o})`;puff(c.x,c.y,c.w)}
   if(k==="fog"){sx.fillStyle="rgba(255,255,255,.18)";for(let i=0;i<5;i++){const y=SH*(.35+i*.13)+Math.sin(t/2000+i)*6;sx.fillRect(0,y,SW,14)}}
   // precipitation
-  if(k==="rain"||k==="storm"){const n=Math.min(220,60+sc.precip*900+(k==="storm"?80:0));sx.strokeStyle="rgba(220,235,255,.55)";sx.lineWidth=1.2;
+  if(k==="rain"||k==="storm"){const n=Math.min(220,60+sc.precip*900+(k==="storm"?80:0));sx.strokeStyle="rgba(225,238,255,.75)";sx.lineWidth=1.5;
     for(let i=0;i<n;i++){const p=parts[i];p.y+=9*p.s;p.x+=vx*1.4;if(p.y>SH){p.y=-10;p.x=Math.random()*SW}if(p.x>SW)p.x=0;if(p.x<0)p.x=SW;
       sx.beginPath();sx.moveTo(p.x,p.y);sx.lineTo(p.x-vx*2,p.y-12*p.s);sx.stroke()}}
-  if(k==="snow"){sx.fillStyle="rgba(255,255,255,.85)";for(let i=0;i<160;i++){const p=parts[i];p.y+=1.2*p.s;p.x+=vx*.6+Math.sin(t/900+i)*.4;if(p.y>SH){p.y=-4;p.x=Math.random()*SW}if(p.x>SW)p.x=0;if(p.x<0)p.x=SW;sx.beginPath();sx.arc(p.x,p.y,p.r,0,7);sx.fill()}}
+  if(k==="snow"){sx.fillStyle="rgba(255,255,255,.95)";for(let i=0;i<180;i++){const p=parts[i];p.y+=1.2*p.s;p.x+=vx*.6+Math.sin(t/900+i)*.4;if(p.y>SH){p.y=-4;p.x=Math.random()*SW}if(p.x>SW)p.x=0;if(p.x<0)p.x=SW;sx.beginPath();sx.arc(p.x,p.y,p.r,0,7);sx.fill()}}
   if(k==="storm"){if(Math.random()<.004)flash=1;if(flash>0){sx.fillStyle=`rgba(255,255,255,${flash*.5})`;sx.fillRect(0,0,SW,SH);flash-=.06}}
   // wind streaks
-  if(k!=="rain"&&k!=="storm"&&k!=="snow"&&sc.wind>6){sx.strokeStyle="rgba(255,255,255,.35)";sx.lineWidth=1.4;const n=Math.min(26,sc.wind);
+  if(k!=="rain"&&k!=="storm"&&k!=="snow"&&sc.wind>6){sx.strokeStyle="rgba(255,255,255,.55)";sx.lineWidth=1.8;const n=Math.min(26,sc.wind);
     for(let i=0;i<n;i++){const p=parts[100+i];p.x+=vx*3;if(p.x>SW+80)p.x=-80;if(p.x<-80)p.x=SW+80;const y=p.y+Math.sin(t/500+i)*4,L=30+sc.wind*2;
       sx.beginPath();sx.moveTo(p.x,y);sx.quadraticCurveTo(p.x-Math.sign(vx)*L/2,y-4,p.x-Math.sign(vx)*L,y);sx.stroke()}}
 }
@@ -558,12 +578,12 @@ function initMap(){
   re.onAdd=()=>{const b=L.DomUtil.create("button","map-btn");b.type="button";b.textContent="Recenter course";L.DomEvent.disableClickPropagation(b);
     b.onclick=()=>map.fitBounds(L.latLngBounds(COURSE),{padding:[30,30]});return b};re.addTo(map);
   const rate=L.control({position:"bottomright"});
-  rate.onAdd=()=>{const d=L.DomUtil.create("label","map-btn");d.style.display="flex";d.style.gap="6px";d.style.alignItems="center";
+  rate.onAdd=()=>{const d=L.DomUtil.create("label","map-btn");d.id="rateCtl";d.style.display="flex";d.style.gap="6px";d.style.alignItems="center";
     d.innerHTML='Wind playback <select id="windRate" style="font:inherit;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:6px"><option value="1">Real speed</option><option value="5">5x</option><option value="20" selected>20x</option><option value="60">60x</option></select>';
     L.DomEvent.disableClickPropagation(d);L.DomEvent.disableScrollPropagation(d);
     d.querySelector("select").addEventListener("change",e=>{wl.mult=+e.target.value;wl.ctx&&wl.ctx.clearRect(0,0,wl.W,wl.H)});return d};
   rate.addTo(map);
-  map.on("move zoom",()=>{if(wl.ctx){wl.ctx.clearRect(0,0,wl.W,wl.H);if(reduce)drawWindStatic()}});
+  map.on("move zoom",()=>{buildField();if(wl.ctx){wl.ctx.clearRect(0,0,wl.W,wl.H);if(reduce)drawWindStatic()}});
   initWind();
   // The map can be created before the page finishes laying out; refit once it has its real size.
   const refit=()=>{map.invalidateSize();map.fitBounds(L.latLngBounds(COURSE),{padding:[24,24]});initWind()};
@@ -571,8 +591,8 @@ function initMap(){
   new ResizeObserver(()=>{const s=$("map").getBoundingClientRect();if(s.width>0&&s.height>0){if(!fitted){fitted=true;refit()}else{map.invalidateSize();initWind()}}}).observe($("map"));
   addEventListener("load",refit);
 }
-function initWind(){const [c,W,H]=fit($("windLayer"));Object.assign(wl,{ctx:c,W,H});wl.parts=Array.from({length:Math.round(W*H/1600)},newP)}
-function newP(){const max=2+Math.random()*3;return {x:Math.random()*wl.W,y:Math.random()*wl.H,age:Math.random()*max,max,s:.7+Math.random()*.6}}
+function initWind(){const [c,W,H]=fit($("windLayer"));Object.assign(wl,{ctx:c,W,H});wl.parts=Array.from({length:Math.round(W*H/1200)},newP);buildField()}
+function newP(){const max=2+Math.random()*3;return {x:Math.random()*wl.W,y:Math.random()*wl.H,age:Math.random()*max,max,s:.7+Math.random()*.6,r:Math.random()}}
 function brg(a,b){const r=Math.PI/180,p1=a[0]*r,p2=b[0]*r,dl=(b[1]-a[1])*r;
   return (Math.atan2(Math.sin(dl)*Math.cos(p2),Math.cos(p1)*Math.sin(p2)-Math.sin(p1)*Math.cos(p2)*Math.cos(dl))/r+360)%360}
 function dist(a,b){const r=Math.PI/180,dla=(b[0]-a[0])*r,dlo=(b[1]-a[1])*r;
@@ -581,10 +601,12 @@ function dist(a,b){const r=Math.PI/180,dla=(b[0]-a[0])*r,dlo=(b[1]-a[1])*r;
 function updateCourse(){
   const w=state.wx;if(!w)return;const h=w.hourly,i0=hourIndexNow(h),i=Math.min(h.time.length-1,i0+hourOff);
   const spd=h.wind_speed_10m[i],gst=h.wind_gusts_10m[i],from=h.wind_direction_10m[i],t=new Date(h.time[i]);
-  $("hourRead").innerHTML=`<b>${hourOff===0?"Now":t.toLocaleString([],{weekday:"short",hour:"numeric"})}</b>&nbsp; ${Math.round(spd)} mph from the ${compassName(from)}, gusts ${Math.round(gst)}`;
+  const pr=h.precipitation[i],pp=h.precipitation_probability[i];wl.ti=i;
+  $("hourRead").innerHTML=`<b>${hourOff===0?"Now":t.toLocaleString([],{weekday:"short",hour:"numeric"})}</b>&nbsp; ${Math.round(spd)} mph from the ${compassName(from)}, gusts ${Math.round(gst)} &nbsp;·&nbsp; ${pr.toFixed(2)} in, ${pp}% chance`;
   const to=(from+180)*Math.PI/180;Object.assign(wl,{vx:Math.sin(to),vy:-Math.cos(to),speed:spd,gust:gst,col:wl.sat?"#F2FBFD":css("--particle")});
   const b=$("windBadge");
-  if(b)b.innerHTML=`<svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="20" fill="none" stroke="var(--line)" stroke-width="2"/><g transform="rotate(${(from+180)%360} 22 22)"><path d="M22 5 L29 21 L22 17 L15 21 Z" fill="var(--wind)"/><line x1="22" y1="17" x2="22" y2="37" stroke="var(--wind)" stroke-width="3" stroke-linecap="round"/></g></svg><div><b>${Math.round(spd)} mph</b>from ${compassName(from)}, gusts ${Math.round(gst)}</div>`;
+  if(b&&state.mapMode==="rain")b.innerHTML=`<svg viewBox="0 0 44 44" aria-hidden="true"><path d="M22 6c6 9 11 15 11 21a11 11 0 0 1-22 0c0-6 5-12 11-21z" fill="none" stroke="var(--rain)" stroke-width="3"/><clipPath id="dc"><path d="M22 6c6 9 11 15 11 21a11 11 0 0 1-22 0c0-6 5-12 11-21z"/></clipPath><rect clip-path="url(#dc)" x="8" y="${38-Math.min(1,pp/100)*32}" width="28" height="40" fill="var(--rain)" opacity=".55"/></svg><div><b>${pr.toFixed(2)} in</b>${pp}% chance this hour</div>`;
+  else if(b)b.innerHTML=`<svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="20" fill="none" stroke="var(--line)" stroke-width="2"/><g transform="rotate(${(from+180)%360} 22 22)"><path d="M22 5 L29 21 L22 17 L15 21 Z" fill="var(--wind)"/><line x1="22" y1="17" x2="22" y2="37" stroke="var(--wind)" stroke-width="3" stroke-linecap="round"/></g></svg><div><b>${Math.round(spd)} mph</b>from ${compassName(from)}, gusts ${Math.round(gst)}</div>`;
   // classify each stretch: wind coming from ahead = headwind
   const tot={head:0,cross:0,tail:0},segs=[];
   for(let k=1;k<COURSE.length;k++){const a=COURSE[k-1],c=COURSE[k],d=Math.abs(((from-brg(a,c)+540)%360)-180);
@@ -597,6 +619,9 @@ function updateCourse(){
   else setPill("coursePill",{head:"Mostly headwind",cross:"Mostly crosswind",tail:"Mostly tailwind"}[top]+(spd>=15?", rough":""),spd>=15?"bad":top==="head"||top==="cross"?"warn":"");
   if(map){courseGroup.clearLayers();
     L.polyline(COURSE,{color:"#0B1419",weight:11,opacity:.7,lineCap:"round",lineJoin:"round",interactive:false}).addTo(courseGroup);
+    if(state.mapMode==="rain"){
+      setPill("coursePill",pr<.005?(pp>=40?"Showers possible":"Dry"):pr<.1?"Light rain":pr<.3?"Rain":"Heavy rain",pr<.005?"":pr<.3?"warn":"bad");
+      L.polyline(COURSE,{color:"#FFFFFF",weight:5,opacity:.9,lineCap:"round",lineJoin:"round",interactive:false}).addTo(courseGroup);buildField();if(reduce)drawWindStatic();return}
     // merge consecutive stretches with the same wind into one line
     const runs=[];segs.forEach(([a,c,cls])=>{const r=runs[runs.length-1];if(r&&r.cls===cls)r.pts.push(c);else runs.push({cls,pts:[a,c]})});
     runs.forEach(r=>L.polyline(r.pts,{color:css("--"+r.cls),weight:6,lineCap:"round",lineJoin:"round"})
@@ -609,8 +634,9 @@ function metersPerPixel(){const lat=map.getCenter().lat;return 40075016.686*Math
 function drawWind(){
   const c=wl.ctx,now=performance.now(),dt=Math.min(.1,(now-(lastWind||now))/1000);lastWind=now;
   if(!c||wl.vx==null||!map)return;
+  if(state.mapMode==="rain"){drawRain(dt);return}
   c.clearRect(0,0,wl.W,wl.H);
-  c.strokeStyle=wl.col;c.lineWidth=1.8;c.lineCap="round";
+  c.strokeStyle=wl.col;c.lineWidth=2.4;c.lineCap="round";
   const mpp=metersPerPixel(),toPx=v=>v*0.44704/mpp*wl.mult; // mph -> m/s -> px/s
   const sus=toPx(wl.speed),gus=toPx(Math.max(wl.gust,wl.speed));
   // gust bands: pulses that ride downwind across the map at the gust speed
@@ -620,19 +646,84 @@ function drawWind(){
     const along=p.x*wl.vx+p.y*wl.vy,g=Math.pow(Math.max(0,Math.sin((along-gus*tsec)/band*Math.PI*2)),3);
     const v=(sus+(gus-sus)*g)*(.92+.16*p.s/1.3),s=v*dt,tail=Math.max(5,Math.min(90,v*.9));
     p.x+=wl.vx*s;p.y+=wl.vy*s;p.age+=dt;
-    const life=p.age/p.max;c.globalAlpha=Math.sin(Math.PI*Math.min(1,life))*(.55+.4*g);
+    const life=p.age/p.max;c.globalAlpha=Math.min(1,Math.sin(Math.PI*Math.min(1,life))*(.8+.3*g));
     c.beginPath();c.moveTo(p.x-wl.vx*tail,p.y-wl.vy*tail);c.lineTo(p.x,p.y);c.stroke();
     if(life>=1||p.x<-90||p.y<-90||p.x>wl.W+90||p.y>wl.H+90)Object.assign(p,newP(),{age:0})}
   c.globalAlpha=1;
 }
 function drawWindStatic(){
-  const c=wl.ctx;if(!c||wl.vx==null)return;c.clearRect(0,0,wl.W,wl.H);c.strokeStyle=wl.col;c.globalAlpha=.6;c.lineWidth=1.6;
+  const c=wl.ctx;if(!c||wl.vx==null)return;c.clearRect(0,0,wl.W,wl.H);
+  if(state.mapMode==="rain"){if(wl.field)c.drawImage(wl.field.cv,0,0,wl.field.gw*FS,wl.field.gh*FS);return}c.strokeStyle=wl.col;c.globalAlpha=.6;c.lineWidth=1.6;
   const L2=10+Math.min(14,wl.speed);
   for(let y=40;y<wl.H;y+=70)for(let x=40;x<wl.W;x+=70){const ex=x+wl.vx*L2,ey=y+wl.vy*L2;c.beginPath();c.moveTo(x-wl.vx*L2,y-wl.vy*L2);c.lineTo(ex,ey);
     c.lineTo(ex-wl.vx*6+wl.vy*4,ey-wl.vy*6-wl.vx*4);c.moveTo(ex,ey);c.lineTo(ex-wl.vx*6-wl.vy*4,ey-wl.vy*6+wl.vx*4);c.stroke()}
   c.globalAlpha=1;
 }
-$("hourSlider").addEventListener("input",e=>{hourOff=+e.target.value;updateCourse()});
+/* ---------- precipitation field ---------- */
+// 9 x 9 forecast points over greater Boston, about 3 miles apart
+const PG={lat0:42.20,dlat:0.04,nlat:9,lon0:-71.35,dlon:0.0625,nlon:9,precip:null};
+const FS=8; // field cell size in screen pixels
+state.mapMode="wind";
+async function getPrecipGrid(){
+  const la=[],lo=[];
+  for(let i=0;i<PG.nlat;i++)for(let j=0;j<PG.nlon;j++){la.push((PG.lat0+i*PG.dlat).toFixed(4));lo.push((PG.lon0+j*PG.dlon).toFixed(4))}
+  const u=`https://api.open-meteo.com/v1/forecast?latitude=${la.join(",")}&longitude=${lo.join(",")}&hourly=precipitation&precipitation_unit=inch&timezone=America%2FNew_York&forecast_days=3`;
+  const r=await fetch(u);if(!r.ok)throw new Error("Precipitation grid returned "+r.status);
+  let j=await r.json();if(!Array.isArray(j))j=[j];PG.precip=j.map(x=>x.hourly.precipitation);
+}
+function pgAt(lat,lon,ti){
+  if(!PG.precip)return 0;
+  const fi=Math.max(0,Math.min(PG.nlat-1.001,(lat-PG.lat0)/PG.dlat)),fj=Math.max(0,Math.min(PG.nlon-1.001,(lon-PG.lon0)/PG.dlon));
+  const i=Math.floor(fi),j=Math.floor(fj),a=fi-i,b=fj-j,v=(ii,jj)=>PG.precip[ii*PG.nlon+jj][ti]||0;
+  return v(i,j)*(1-a)*(1-b)+v(i,j+1)*(1-a)*b+v(i+1,j)*a*(1-b)+v(i+1,j+1)*a*b;
+}
+const PSTOPS=[[.005,[90,170,255,0]],[.01,[90,170,255,.4]],[.05,[40,200,120,.55]],[.1,[250,220,40,.6]],[.25,[250,140,30,.65]],[.5,[230,50,40,.7]],[1,[190,40,160,.75]]];
+function pcolor(v){
+  if(v<PSTOPS[0][0])return [0,0,0,0];
+  for(let k=1;k<PSTOPS.length;k++)if(v<PSTOPS[k][0]){const [v0,c0]=PSTOPS[k-1],[v1,c1]=PSTOPS[k],f=(v-v0)/(v1-v0);return c0.map((x,n)=>x+(c1[n]-x)*f)}
+  return PSTOPS[PSTOPS.length-1][1];
+}
+function buildField(){
+  if(state.mapMode!=="rain"||!map||!wl.W||wl.ti==null)return;
+  const gw=Math.ceil(wl.W/FS),gh=Math.ceil(wl.H/FS);
+  const cv=wl.field&&wl.field.gw===gw&&wl.field.gh===gh?wl.field.cv:Object.assign(document.createElement("canvas"),{width:gw,height:gh});
+  const x=cv.getContext("2d"),img=x.createImageData(gw,gh),vals=new Float32Array(gw*gh);
+  for(let y=0;y<gh;y++)for(let xx=0;xx<gw;xx++){
+    const ll=map.containerPointToLatLng([xx*FS+FS/2,y*FS+FS/2]),v=pgAt(ll.lat,ll.lng,wl.ti),c=pcolor(v),o=(y*gw+xx);
+    vals[o]=v;img.data[o*4]=c[0];img.data[o*4+1]=c[1];img.data[o*4+2]=c[2];img.data[o*4+3]=c[3]*255}
+  x.putImageData(img,0,0);wl.field={cv,vals,gw,gh};
+}
+function drawRain(dt){
+  const c=wl.ctx;c.clearRect(0,0,wl.W,wl.H);const f=wl.field;if(!f)return;
+  c.imageSmoothingEnabled=true;c.drawImage(f.cv,0,0,f.gw*FS,f.gh*FS);
+  const drift=wl.vx*Math.min(1.2,wl.speed/12)*160,fall=460;
+  c.strokeStyle="rgba(215,232,255,.85)";c.lineWidth=1.4;c.lineCap="round";c.beginPath();
+  for(const p of wl.parts){
+    p.x+=drift*dt*p.s;p.y+=fall*dt*p.s;
+    if(p.y>wl.H){p.y=-12;p.x=Math.random()*wl.W}if(p.x>wl.W)p.x-=wl.W;if(p.x<0)p.x+=wl.W;
+    const gx=Math.min(f.gw-1,Math.max(0,p.x/FS|0)),gy=Math.min(f.gh-1,Math.max(0,p.y/FS|0)),v=f.vals[gy*f.gw+gx];
+    if(v<.005||p.r>Math.min(1,.15+v/.25))continue;
+    const L=10+6*p.s;c.moveTo(p.x-drift/fall*L,p.y-L);c.lineTo(p.x,p.y)}
+  c.stroke();
+}
+
+/* ---------- play through 48 hours ---------- */
+let playT=null;
+function setPlay(on){
+  clearInterval(playT);playT=null;const b=$("playBtn");
+  if(on){playT=setInterval(()=>{hourOff=(hourOff+1)%48;$("hourSlider").value=hourOff;updateCourse()},650)}
+  b.setAttribute("aria-pressed",on);
+  b.innerHTML=on?'<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 2h3v10H3zM8 2h3v10H8z" fill="currentColor"/></svg><span>Pause</span>'
+               :'<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg><span>Play 48 hours</span>';
+}
+$("playBtn").addEventListener("click",()=>setPlay(!playT));
+$("hourSlider").addEventListener("input",e=>{setPlay(false);hourOff=+e.target.value;updateCourse()});
+document.querySelectorAll(".tab[data-m]").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll(".tab[data-m]").forEach(t=>t.setAttribute("aria-selected",t===b));
+  state.mapMode=b.dataset.m;$("rainLegend").hidden=state.mapMode!=="rain";$("windLegend").hidden=state.mapMode==="rain";
+  const rc=$("rateCtl");if(rc)rc.hidden=state.mapMode==="rain";
+  $("courseH").textContent=state.mapMode==="rain"?"Head of the Charles course precipitation":"Head of the Charles course wind";
+  if(wl.ctx)wl.ctx.clearRect(0,0,wl.W,wl.H);updateCourse()}));
 
 function loop(t){drawSky(t);drawRiver(t);drawWind();if(!reduce)requestAnimationFrame(loop)}
 
@@ -644,6 +735,7 @@ async function load(){
   al.status==="fulfilled"?renderAlerts(al.value):renderAlerts([],al.reason.message);
   rv.status==="fulfilled"?renderRiver(rv.value):riverErr(rv.reason.message||"River gauge data is not available right now");
   renderWater();
+  getPrecipGrid().then(()=>{buildField();if(reduce)drawWindStatic()}).catch(()=>{});
   $("updated").textContent="Updated "+new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
   if(reduce){drawSky(0);drawRiver(0)}
 }
