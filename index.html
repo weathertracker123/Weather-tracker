@@ -244,7 +244,7 @@ footer a{color:var(--river)}
         <span><i style="background:var(--cross)"></i>Crosswind <b id="pCross">--</b></span>
         <span><i style="background:var(--tail)"></i>Tailwind <b id="pTail">--</b></span>
       </div>
-      <p class="note">Course colors show the wind each stretch faces while racing upstream from the start to the finish. Drag the map to move around, and scroll or pinch to zoom. The course line is approximate, drawn through the bridge positions.</p>
+      <p class="note">Course colors show the wind each stretch faces while racing upstream from the start to the finish. Drag the map to move around, and scroll or pinch to zoom. The course line is approximate, drawn through the bridge positions. Wind streaks travel at the true ground speed for the current zoom, multiplied by the playback rate in the map corner, and gusts sweep through as faster bands.</p>
     </div>
   </section>
 
@@ -537,7 +537,7 @@ const MARKS=[["Start",COURSE[0],true,"right"],["BU Bridge",[42.35238,-71.11066],
   ["Western Ave Bridge",[42.36422,-71.11690],false,"right"],["Weeks Footbridge",[42.36853,-71.11807],false,"right"],
   ["Anderson Bridge",[42.3689,-71.1232],false,"bottom"],["Eliot Bridge",[42.3718,-71.1328],false,"right"],["Finish",COURSE[COURSE.length-1],true,"left"]];
 let map=null,courseGroup=null,hourOff=0;
-const wl={ctx:null,W:0,H:0,parts:[],vx:null,vy:0,speed:0,gust:0,col:"#F2FBFD",sat:true};
+const wl={ctx:null,W:0,H:0,parts:[],vx:null,vy:0,speed:0,gust:0,col:"#F2FBFD",sat:true,mult:20};
 
 function initMap(){
   if(!window.L){$("map").innerHTML='<p class="err" style="padding:16px">The map library did not load. Check your connection and refresh.</p>';return}
@@ -559,11 +559,17 @@ function initMap(){
   const re=L.control({position:"bottomleft"});
   re.onAdd=()=>{const b=L.DomUtil.create("button","map-btn");b.type="button";b.textContent="Recenter course";L.DomEvent.disableClickPropagation(b);
     b.onclick=()=>map.fitBounds(L.latLngBounds(COURSE),{padding:[30,30]});return b};re.addTo(map);
+  const rate=L.control({position:"bottomright"});
+  rate.onAdd=()=>{const d=L.DomUtil.create("label","map-btn");d.style.display="flex";d.style.gap="6px";d.style.alignItems="center";
+    d.innerHTML='Wind playback <select id="windRate" style="font:inherit;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:6px"><option value="1">Real speed</option><option value="5">5x</option><option value="20" selected>20x</option><option value="60">60x</option></select>';
+    L.DomEvent.disableClickPropagation(d);L.DomEvent.disableScrollPropagation(d);
+    d.querySelector("select").addEventListener("change",e=>{wl.mult=+e.target.value;wl.ctx&&wl.ctx.clearRect(0,0,wl.W,wl.H)});return d};
+  rate.addTo(map);
   map.on("move zoom",()=>{if(wl.ctx){wl.ctx.clearRect(0,0,wl.W,wl.H);if(reduce)drawWindStatic()}});
   initWind();
 }
 function initWind(){const [c,W,H]=fit($("windLayer"));Object.assign(wl,{ctx:c,W,H});wl.parts=Array.from({length:Math.round(W*H/700)},newP)}
-function newP(){return {x:Math.random()*wl.W,y:Math.random()*wl.H,age:Math.random()*60|0,max:50+Math.random()*70,s:.7+Math.random()*.6}}
+function newP(){return {x:Math.random()*wl.W,y:Math.random()*wl.H,age:Math.random()*90|0,max:80+Math.random()*100,s:.7+Math.random()*.6}}
 function brg(a,b){const r=Math.PI/180,p1=a[0]*r,p2=b[0]*r,dl=(b[1]-a[1])*r;
   return (Math.atan2(Math.sin(dl)*Math.cos(p2),Math.cos(p1)*Math.sin(p2)-Math.sin(p1)*Math.cos(p2)*Math.cos(dl))/r+360)%360}
 function dist(a,b){const r=Math.PI/180,dla=(b[0]-a[0])*r,dlo=(b[1]-a[1])*r;
@@ -591,14 +597,24 @@ function updateCourse(){
     segs.forEach(([a,c,cls])=>L.polyline([a,c],{color:css("--"+cls),weight:7,lineCap:"round"}).bindTooltip({head:"Headwind",cross:"Crosswind",tail:"Tailwind"}[cls]+" on this stretch",{sticky:true}).addTo(courseGroup))}
   if(reduce)drawWindStatic();
 }
+// Real-scale wind: streaks move at the true ground speed for the current zoom, times the chosen playback rate.
+let lastWind=0;
+function metersPerPixel(){const lat=map.getCenter().lat;return 40075016.686*Math.cos(lat*Math.PI/180)/(256*Math.pow(2,map.getZoom()))}
 function drawWind(){
-  const c=wl.ctx;if(!c||wl.vx==null)return;
-  c.globalCompositeOperation="destination-in";c.fillStyle="rgba(0,0,0,.9)";c.fillRect(0,0,wl.W,wl.H);c.globalCompositeOperation="source-over";
-  c.strokeStyle=wl.col;c.lineWidth=1.5;c.globalAlpha=.8;c.beginPath();
-  const base=.35+wl.speed*.11,gf=Math.max(0,(wl.gust-wl.speed)/Math.max(wl.speed,1)),now=performance.now();
-  for(const p of wl.parts){const s=base*p.s*(1+gf*.45*Math.sin(now/800+p.y*.015+p.x*.004))*2;
+  const c=wl.ctx,now=performance.now(),dt=Math.min(.1,(now-(lastWind||now))/1000);lastWind=now;
+  if(!c||wl.vx==null||!map)return;
+  c.globalCompositeOperation="destination-in";c.fillStyle=`rgba(0,0,0,${Math.pow(.9,dt*60)})`;c.fillRect(0,0,wl.W,wl.H);c.globalCompositeOperation="source-over";
+  c.strokeStyle=wl.col;c.lineWidth=1.5;c.globalAlpha=.85;c.beginPath();
+  const mpp=metersPerPixel(),toPx=v=>v*0.44704/mpp*wl.mult; // mph -> m/s -> px/s
+  const sus=toPx(wl.speed),gus=toPx(Math.max(wl.gust,wl.speed));
+  // gust bands: pulses that ride downwind across the map at the gust speed
+  const band=Math.max(120,gus*6),tsec=now/1000;
+  for(const p of wl.parts){
+    const along=p.x*wl.vx+p.y*wl.vy,g=Math.pow(Math.max(0,Math.sin((along-gus*tsec)/band*Math.PI*2)),3);
+    const s=(sus+(gus-sus)*g)*(.92+.16*p.s/1.3)*dt;
     const nx=p.x+wl.vx*s,ny=p.y+wl.vy*s;c.moveTo(p.x,p.y);c.lineTo(nx,ny);p.x=nx;p.y=ny;
-    if(++p.age>p.max||nx<0||ny<0||nx>wl.W||ny>wl.H)Object.assign(p,newP(),{age:0})}
+    p.age+=dt*60*Math.min(1,Math.max(.15,wl.mult/20)); // slower playback keeps streaks alive longer
+    if(p.age>p.max||nx<0||ny<0||nx>wl.W||ny>wl.H)Object.assign(p,newP(),{age:0})}
   c.stroke();c.globalAlpha=1;
 }
 function drawWindStatic(){
