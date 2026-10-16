@@ -117,6 +117,15 @@ h1,h2,h3{margin:0;text-wrap:balance}
 .wind-badge{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,.15);font:500 13px var(--body)}
 .wind-badge svg{width:44px;height:44px}
 .wind-badge b{font:600 26px/1 var(--display);display:block}
+.map-clock{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 14px 10px 10px;display:flex;gap:12px;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+.map-clock svg{width:58px;height:58px;flex:none}
+.map-clock .ct{font:600 34px/1 var(--display);font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.map-clock .cd{font:500 13px/1.3 var(--body);color:var(--muted)}
+.map-clock .co{display:inline-block;margin-top:4px;font:600 11px/1 var(--body);letter-spacing:.08em;text-transform:uppercase;padding:4px 8px;border-radius:999px;background:var(--river-soft);color:var(--river)}
+.map-clock.future .co{background:var(--warn-soft);color:var(--warn)}
+.live-clock{font:600 clamp(34px,5vw,48px)/1 var(--display);font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.live-clock small{font-size:.45em;margin-left:4px}
+.live-day{font:500 14px/1.2 var(--body);color:rgba(255,255,255,.92)}
 .leaflet-tooltip.lm{background:var(--surface);color:var(--ink);border:1px solid var(--line);font:600 11px/1.2 var(--body);letter-spacing:.04em;padding:3px 7px;box-shadow:none}
 .leaflet-tooltip.lm::before{display:none}
 .leaflet-tooltip.lm.end{background:var(--ink);color:var(--bg)}
@@ -160,6 +169,7 @@ footer a{color:var(--river)}
         <div class="sky-meta" id="nowMeta"></div>
       </div>
       <div class="sky-right">
+        <div class="live-clock" id="liveClock">--</div><div class="live-day" id="liveDay"></div>
         <button class="refresh" id="refresh" type="button">Refresh</button>
         <div class="label" id="updated">Updating</div>
       </div>
@@ -574,6 +584,7 @@ function initMap(){
   MARKS.forEach(([n,ll,end,dir])=>L.circleMarker(ll,{radius:end?6:4,color:css("--ink"),weight:2,fillColor:end?css("--ink"):css("--surface"),fillOpacity:1,pane:"markerPane"})
     .addTo(map).bindTooltip(n,{permanent:true,direction:dir,offset:dir==="left"?[-8,0]:dir==="right"?[8,0]:[0,8],className:"lm"+(end?" end":"")}));
   const badge=L.control({position:"topright"});badge.onAdd=()=>{const d=L.DomUtil.create("div","wind-badge");d.id="windBadge";return d};badge.addTo(map);
+  const clk=L.control({position:"topright"});clk.onAdd=()=>{const d=L.DomUtil.create("div","map-clock");d.id="mapClock";d.setAttribute("aria-live","polite");return d};clk.addTo(map);
   const re=L.control({position:"bottomleft"});
   re.onAdd=()=>{const b=L.DomUtil.create("button","map-btn");b.type="button";b.textContent="Recenter course";L.DomEvent.disableClickPropagation(b);
     b.onclick=()=>map.fitBounds(L.latLngBounds(COURSE),{padding:[30,30]});return b};re.addTo(map);
@@ -604,6 +615,7 @@ function updateCourse(){
   const pr=h.precipitation[i],pp=h.precipitation_probability[i];wl.ti=i;
   $("hourRead").innerHTML=`<b>${hourOff===0?"Now":t.toLocaleString([],{weekday:"short",hour:"numeric"})}</b>&nbsp; ${Math.round(spd)} mph from the ${compassName(from)}, gusts ${Math.round(gst)} &nbsp;·&nbsp; ${pr.toFixed(2)} in, ${pp}% chance`;
   const to=(from+180)*Math.PI/180;Object.assign(wl,{vx:Math.sin(to),vy:-Math.cos(to),speed:spd,gust:gst,col:wl.sat?"#F2FBFD":css("--particle")});
+  renderMapClock(hourOff===0?new Date():t,hourOff,!!h.is_day[i]);
   const b=$("windBadge");
   if(b&&state.mapMode==="rain")b.innerHTML=`<svg viewBox="0 0 44 44" aria-hidden="true"><path d="M22 6c6 9 11 15 11 21a11 11 0 0 1-22 0c0-6 5-12 11-21z" fill="none" stroke="var(--rain)" stroke-width="3"/><clipPath id="dc"><path d="M22 6c6 9 11 15 11 21a11 11 0 0 1-22 0c0-6 5-12 11-21z"/></clipPath><rect clip-path="url(#dc)" x="8" y="${38-Math.min(1,pp/100)*32}" width="28" height="40" fill="var(--rain)" opacity=".55"/></svg><div><b>${pr.toFixed(2)} in</b>${pp}% chance this hour</div>`;
   else if(b)b.innerHTML=`<svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="20" fill="none" stroke="var(--line)" stroke-width="2"/><g transform="rotate(${(from+180)%360} 22 22)"><path d="M22 5 L29 21 L22 17 L15 21 Z" fill="var(--wind)"/><line x1="22" y1="17" x2="22" y2="37" stroke="var(--wind)" stroke-width="3" stroke-linecap="round"/></g></svg><div><b>${Math.round(spd)} mph</b>from ${compassName(from)}, gusts ${Math.round(gst)}</div>`;
@@ -628,6 +640,24 @@ function updateCourse(){
       .bindTooltip({head:"Headwind",cross:"Crosswind",tail:"Tailwind"}[r.cls]+" on this stretch",{sticky:true}).addTo(courseGroup))}
   if(reduce)drawWindStatic();
 }
+function clockFace(d,day){
+  const hA=(d.getHours()%12+d.getMinutes()/60)*30,mA=d.getMinutes()*6;
+  const ticks=Array.from({length:12},(_,k)=>{const a=k*30*Math.PI/180,r1=k%3?25:22;return `<line x1="${30+Math.sin(a)*r1}" y1="${30-Math.cos(a)*r1}" x2="${30+Math.sin(a)*27}" y2="${30-Math.cos(a)*27}" stroke="var(--muted)" stroke-width="${k%3?1.2:2}"/>`}).join("");
+  return `<svg viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="28" fill="${day?"var(--warn-soft)":"var(--river-soft)"}" stroke="var(--line)" stroke-width="2"/>${ticks}
+  <line x1="30" y1="30" x2="${30+Math.sin(hA*Math.PI/180)*14}" y2="${30-Math.cos(hA*Math.PI/180)*14}" stroke="var(--ink)" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="30" y1="30" x2="${30+Math.sin(mA*Math.PI/180)*21}" y2="${30-Math.cos(mA*Math.PI/180)*21}" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="30" cy="30" r="2.6" fill="var(--wind)"/></svg>`;
+}
+function renderMapClock(d,off,day){
+  const c=$("mapClock");if(!c)return;c.classList.toggle("future",off>0);
+  const tm=d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+  c.innerHTML=`${clockFace(d,day)}<div><div class="ct">${tm}</div><div class="cd">${d.toLocaleDateString([],{weekday:"long",month:"short",day:"numeric"})}</div><span class="co">${off===0?"Now":"Forecast +"+off+"h"}</span></div>`;
+}
+function tickLive(){const d=new Date();
+  $("liveClock").innerHTML=d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}).replace(/\s?(AM|PM)/i,"<small>$1</small>");
+  $("liveDay").textContent=d.toLocaleDateString([],{weekday:"long",month:"long",day:"numeric"});
+  if(hourOff===0&&state.wx)renderMapClock(d,0,state.scene.day);}
+tickLive();setInterval(tickLive,15000);
 // Real-scale wind: streaks move at the true ground speed for the current zoom, times the chosen playback rate.
 let lastWind=0;
 function metersPerPixel(){const lat=map.getCenter().lat;return 40075016.686*Math.cos(lat*Math.PI/180)/(256*Math.pow(2,map.getZoom()))}
